@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-x64-debug",
+      "displayName": "Windows x64 Debug (LLVM clang-cl)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+      }
+    },
+    {
+      "name": "windows-x64-release",
+      "displayName": "Windows x64 Release (LLVM clang-cl)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64-debug",
+      "configurePreset": "windows-x64-debug"
+    },
+    {
+      "name": "windows-x64-release",
+      "configurePreset": "windows-x64-release"
+    }
+  ]
+}

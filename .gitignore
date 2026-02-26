@@ -1,0 +1,21 @@
+# 环境变量配置（含敏感信息，不提交）
+.env
+
+# Ignore build artifacts and dependencies
+vcpkg_installed/
+CMakeCache.txt
+CMakeFiles/
+.cache/
+
+
+# Ignore build directories and output files
+build/
+out/
+*.epub
+fanqie.db
+
+# Ignore IDE and editor files
+.vs/
+*.user
+compile_commands.json
+.vscode/

@@ -1,0 +1,7 @@
+CompileFlags:
+  # 让 clangd 从项目根的 compile_commands.json 获取编译参数
+  # （cmake.copyCompileCommands 会把它放在这里）
+  CompilationDatabase: .
+
+Diagnostics:
+  UnusedIncludes: None
