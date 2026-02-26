@@ -202,6 +202,14 @@ std::vector<TocItem> Database::get_toc(const std::string& book_id) {
     return toc;
 }
 
+int Database::toc_count(const std::string& book_id) {
+    SQLite::Statement stmt(*db_,
+        "SELECT COUNT(*) FROM toc WHERE book_id=?");
+    stmt.bind(1, book_id);
+    if (stmt.executeStep()) return stmt.getColumn(0).getInt();
+    return 0;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // 章节
 // ──────────────────────────────────────────────────────────────────────────────

@@ -29,17 +29,40 @@ int run_app(std::shared_ptr<AppContext> ctx) {
     // tab_toggle 仅用于视觉渲染，不参与键盘焦点链，
     // 这样事件可以直接路由到活动屏幕（书架/搜索）的事件处理器。
     auto tab_toggle = Toggle(&tab_labels, &selected_tab);
+    auto go_back = [&]() {
+        if (selected_tab > 0) selected_tab -= 1;
+    };
+    auto close_app = [&]() {
+        ctx->app_exit_requested = true;
+        screen.ExitLoopClosure()();
+    };
+    ButtonOption nav_btn_opt = ButtonOption::Ascii();
+    auto back_btn = Button(" 返回上一级 ", go_back, nav_btn_opt);
+    auto close_btn = Button(" 关闭 ", close_app, nav_btn_opt);
+    auto header_controls = Container::Horizontal({
+        back_btn,
+        close_btn,
+        tab_toggle,
+    });
 
     auto main_container = Container::Tab(
         {bookshelf, search},
         &selected_tab);
+    auto root_container = Container::Vertical({
+        header_controls,
+        main_container,
+    });
+    main_container->TakeFocus();
 
     // root 只包含内容区，使其直接获得焦点。
-    auto root_renderer = Renderer(main_container, [&] {
+    auto root_renderer = Renderer(root_container, [&] {
         return vbox({
             // ── 顶部标题栏 ────────────────────────────────────
             hbox({
                 text(" 🍅 番茄小说 TUI ") | bold | color(Color::Red),
+                text("  "),
+                back_btn->Render(),
+                close_btn->Render(),
                 filler(),
                 tab_toggle->Render(),
             }) | bgcolor(Color::Black) | color(Color::White),
@@ -55,15 +78,22 @@ int run_app(std::shared_ptr<AppContext> ctx) {
                 text(":切换标签  "),
                 text(" Enter") | bold,
                 text(":确认  "),
-                text(" ↑↓ / j k") | bold,
+                text(" ↑↓/jk") | bold,
                 text(":导航  "),
+                text(" 鼠标") | bold,
+                text(":点击按钮/选择"),
             }) | color(Color::GrayDark),
         });
     });
 
     // 全局快捷键：在内容区事件之前捕获
     auto event_handler = CatchEvent(root_renderer, [&](Event ev) {
+        if (ctx->app_exit_requested.exchange(false)) {
+            screen.ExitLoopClosure()();
+            return true;
+        }
         if (ev == Event::Character('q') || ev == Event::Character('Q')) {
+            ctx->app_exit_requested = true;
             screen.ExitLoopClosure()();
             return true;
         }

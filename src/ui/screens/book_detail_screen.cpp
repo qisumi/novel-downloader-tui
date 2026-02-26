@@ -22,43 +22,88 @@ ftxui::Component make_book_detail_screen(
     struct BookDetailState {
         Book               book;
         std::vector<TocItem> toc;
-        int                selected   = 0;
-        bool               loading    = false;
-        int                dl_current = 0;
-        int                dl_total   = 0;
-        int                range_start = -1;
-        int                range_end   = -1;
+        int                selected      = 0;
+        int                scroll_offset = 0;
+        bool               loading       = false;
+        int                dl_current    = 0;
+        int                dl_total      = 0;
+        int                range_start   = -1;
+        int                range_end     = -1;
         std::string        status_msg;
+        std::string        range_start_input;
+        std::string        range_end_input;
         std::mutex         mtx;
     };
     auto state = std::make_shared<BookDetailState>();
     state->book = ctx->current_book;
 
+    auto apply_default_full_range = [=](int total) {
+        if (total <= 0) return;
+        state->range_start = 0;
+        state->range_end = total - 1;
+        state->range_start_input = "1";
+        state->range_end_input = std::to_string(total);
+    };
+
     // ── 异步加载目录 ───────────────────────────────────────────
-    auto load_toc = [=, &screen]() {
+    auto load_toc = [=, &screen](bool force_remote) {
         {
             std::lock_guard lock(state->mtx);
             state->loading = true;
-            state->status_msg = "加载目录中…";
+            state->status_msg = force_remote ? "更新目录中…" : "加载目录中…";
         }
         screen.PostEvent(Event::Custom);
 
         std::thread([=, &screen]() {
-            // 优先读本地缓存
-            auto toc = ctx->db->get_toc(state->book.book_id);
+            std::vector<TocItem> toc;
+            if (!force_remote) {
+                // 优先读本地缓存
+                toc = ctx->db->get_toc(state->book.book_id);
+            }
             if (toc.empty()) {
                 toc = ctx->client->get_toc(state->book.book_id);
                 if (!toc.empty())
                     ctx->db->save_toc(state->book.book_id, toc);
             }
             std::lock_guard lock(state->mtx);
+            int old_total = static_cast<int>(state->toc.size());
+            int old_start = state->range_start;
+            int old_end = state->range_end;
+            bool has_custom_range =
+                !state->range_start_input.empty() || !state->range_end_input.empty();
+
             state->toc     = std::move(toc);
+            int new_total = static_cast<int>(state->toc.size());
+            state->selected = std::clamp(state->selected, 0, std::max(0, new_total - 1));
+            state->scroll_offset = std::clamp(state->scroll_offset, 0, std::max(0, new_total - 1));
+
+            if (new_total > 0) {
+                if (!has_custom_range || old_total <= 0) {
+                    apply_default_full_range(new_total);
+                } else {
+                    state->range_start = std::clamp(old_start, 0, new_total - 1);
+                    state->range_end = std::clamp(old_end, 0, new_total - 1);
+                    if (state->range_start > state->range_end) {
+                        std::swap(state->range_start, state->range_end);
+                    }
+                    state->range_start_input = std::to_string(state->range_start + 1);
+                    state->range_end_input = std::to_string(state->range_end + 1);
+                }
+            } else {
+                state->range_start = -1;
+                state->range_end = -1;
+                state->range_start_input.clear();
+                state->range_end_input.clear();
+            }
+
             state->loading = false;
-            state->status_msg = state->toc.empty() ? "目录加载失败" : "";
+            state->status_msg = state->toc.empty()
+                ? (force_remote ? "目录更新失败" : "目录加载失败")
+                : (force_remote ? "目录已更新" : "");
             screen.PostEvent(Event::Custom);
         }).detach();
     };
-    load_toc();
+    load_toc(false);
 
     // ── 批量下载 ───────────────────────────────────────────────
     auto download_all = [=, &screen]() {
@@ -209,39 +254,221 @@ ftxui::Component make_book_detail_screen(
 
     auto export_epub = [=, &screen]() { export_by_format(true); };
     auto export_txt  = [=, &screen]() { export_by_format(false); };
+    auto refresh_toc = [=, &screen]() {
+        {
+            std::lock_guard lock(state->mtx);
+            if (state->loading) return;
+        }
+        load_toc(true);
+    };
 
-    auto container = Container::Vertical({});
+    // ── 清除范围 ───────────────────────────────────────────────
+    auto clear_range = [=]() {
+        std::lock_guard lock(state->mtx);
+        int total = static_cast<int>(state->toc.size());
+        if (total > 0) {
+            apply_default_full_range(total);
+        } else {
+            state->range_start = -1;
+            state->range_end = -1;
+            state->range_start_input.clear();
+            state->range_end_input.clear();
+        }
+        state->status_msg = "已恢复默认导出范围（1~最后一章）";
+    };
 
-    auto renderer = Renderer(container, [=]() mutable {
+    // ── 校验并应用范围输入 ───────────────────────────────────────
+    auto validate_and_apply_range = [=]() {
+        std::lock_guard lock(state->mtx);
+        int total = static_cast<int>(state->toc.size());
+        if (total == 0) {
+            state->status_msg = "目录为空";
+            return;
+        }
+
+        int start = -1;
+        int end = -1;
+
+        // 解析起点
+        if (!state->range_start_input.empty()) {
+            try {
+                int val = std::stoi(state->range_start_input);
+                if (val < 1) {
+                    state->status_msg = "起点必须 ≥ 1";
+                    return;
+                }
+                if (val > total) {
+                    state->status_msg = "起点超出范围 (最大 " + std::to_string(total) + ")";
+                    return;
+                }
+                start = val - 1;  // 转为 0-based
+            } catch (...) {
+                state->status_msg = "起点格式无效，请输入数字";
+                return;
+            }
+        }
+
+        // 解析终点
+        if (!state->range_end_input.empty()) {
+            try {
+                int val = std::stoi(state->range_end_input);
+                if (val < 1) {
+                    state->status_msg = "终点必须 ≥ 1";
+                    return;
+                }
+                if (val > total) {
+                    state->status_msg = "终点超出范围 (最大 " + std::to_string(total) + ")";
+                    return;
+                }
+                end = val - 1;  // 转为 0-based
+            } catch (...) {
+                state->status_msg = "终点格式无效，请输入数字";
+                return;
+            }
+        }
+
+        // 自动排序（如果都设置了）
+        if (start >= 0 && end >= 0 && start > end) {
+            std::swap(start, end);
+            // 同步更新输入框
+            state->range_start_input = std::to_string(start + 1);
+            state->range_end_input = std::to_string(end + 1);
+        }
+
+        // 生成状态消息
+        if (start < 0 && end < 0) {
+            apply_default_full_range(total);
+            state->status_msg = "已恢复默认导出范围（1~最后一章）";
+        } else if (start < 0) {
+            state->range_start = start;
+            state->range_end = end;
+            state->status_msg = "已设置范围：第 1 - " + std::to_string(end + 1) + " 章";
+        } else if (end < 0) {
+            state->range_start = start;
+            state->range_end = end;
+            state->status_msg = "已设置范围：第 " + std::to_string(start + 1) + " - " + std::to_string(total) + " 章";
+        } else {
+            state->range_start = start;
+            state->range_end = end;
+            state->status_msg = "已设置范围：第 " + std::to_string(start + 1) + " - " + std::to_string(end + 1) + " 章";
+        }
+    };
+
+    // ── 组件创建 ───────────────────────────────────────────────
+    auto toc_box = std::make_shared<Box>();
+    // 优先使用目录区域真实高度，避免固定 overhead 导致滚动触发偏移。
+    auto bd_vis_count = [=, &screen]() {
+        int h = toc_box->y_max - toc_box->y_min + 1;
+        if (h > 0) return h;
+        // 首帧 reflect 尚未生效时的保底值
+        constexpr int BD_FALLBACK_OVERHEAD = 17;
+        return std::max(1, screen.dimy() - BD_FALLBACK_OVERHEAD);
+    };
+    auto bd_ensure_vis = [=, &screen]() {
+        int vis = bd_vis_count();
+        if (state->selected < state->scroll_offset)
+            state->scroll_offset = state->selected;
+        if (state->selected >= state->scroll_offset + vis)
+            state->scroll_offset = state->selected - vis + 1;
+        state->scroll_offset = std::max(0, state->scroll_offset);
+    };
+
+    // 范围输入框
+    InputOption input_opt;
+    input_opt.placeholder = "全部";
+    auto input_start = Input(&state->range_start_input, input_opt);
+    auto input_end = Input(&state->range_end_input, input_opt);
+
+    // 按钮组件（支持鼠标点击）
+    ButtonOption btn_opt = ButtonOption::Ascii();
+    auto back_to_prev = [=, &screen]() {
+        screen.ExitLoopClosure()();
+    };
+    auto close_app = [=, &screen]() {
+        ctx->app_exit_requested = true;
+        screen.PostEvent(Event::Custom);
+        screen.ExitLoopClosure()();
+    };
+    auto btn_back = Button(" 返回上一级 ", back_to_prev, btn_opt);
+    auto btn_close = Button(" 关闭 ", close_app, btn_opt);
+    auto btn_download = Button(" 下载全部 ", download_all, btn_opt);
+    auto btn_refresh = Button(" 更新章节 ", refresh_toc, btn_opt);
+    auto btn_epub = Button(" 导出EPUB ", export_epub, btn_opt);
+    auto btn_txt = Button(" 导出TXT ", export_txt, btn_opt);
+    auto btn_clear = Button(" 清除范围 ", clear_range, btn_opt);
+
+    auto nav_bar = Container::Horizontal({
+        btn_back,
+        btn_close,
+    });
+
+    // 按钮容器
+    auto button_bar = Container::Horizontal({
+        btn_download,
+        btn_refresh,
+        btn_epub,
+        btn_txt,
+        btn_clear,
+    });
+
+    // 范围输入容器
+    auto range_input_bar = Container::Horizontal({
+        input_start,
+        input_end,
+    });
+
+    // 目录列表容器（用于键盘导航）
+    auto toc_container = Container::Vertical({});
+
+    // 主容器
+    auto container = Container::Vertical({
+        nav_bar,
+        button_bar,
+        range_input_bar,
+        toc_container,
+    });
+
+    // ── 渲染 ──────────────────────────────────────────────────
+    auto renderer = Renderer(container, [=, &screen]() mutable {
         std::lock_guard lock(state->mtx);
         auto [range_s, range_e] = resolve_export_range(
             static_cast<int>(state->toc.size()), state->range_start, state->range_end);
-        std::string range_text;
-        if (state->toc.empty()) {
-            range_text = "导出范围：无章节";
-        } else if (range_s == 0 && range_e == static_cast<int>(state->toc.size()) - 1) {
-            range_text = "导出范围：全部章节";
-        } else {
-            range_text = "导出范围：第 " + std::to_string(range_s + 1)
-                       + " - " + std::to_string(range_e + 1) + " 章";
-        }
+        int total_chapters = static_cast<int>(state->toc.size());
+        int selected_count = (range_e - range_s + 1);
 
-        // 目录列表
+        // 目录列表（手动行窗口）
         Elements toc_rows;
-        for (int i = 0; i < static_cast<int>(state->toc.size()); ++i) {
-            const auto& t   = state->toc[i];
-            bool cached     = ctx->db->chapter_cached(t.item_id);
-            auto row = hbox({
-                text(i == state->selected ? " ▶ " : "   "),
-                text(t.title)
-                    | (i == state->selected ? bold : nothing)
-                    | (cached ? color(Color::Green) : color(Color::White)),
-                filler(),
-                text(cached ? "✓" : " ") | color(Color::Green),
-                text("  " + std::to_string(t.word_count) + "字") | color(Color::GrayDark),
-            });
-            toc_rows.push_back(row);
-        }
+        {
+            int vis = bd_vis_count();
+            // ensure_vis（已在锁内）
+            if (state->selected < state->scroll_offset)
+                state->scroll_offset = state->selected;
+            if (state->selected >= state->scroll_offset + vis)
+                state->scroll_offset = state->selected - vis + 1;
+            state->scroll_offset = std::max(0, state->scroll_offset);
+
+            int t_start = state->scroll_offset;
+            int t_end   = std::min(t_start + vis, static_cast<int>(state->toc.size()));
+
+            for (int i = t_start; i < t_end; ++i) {
+                const auto& t = state->toc[i];
+                bool cached  = ctx->db->chapter_cached(t.item_id);
+                bool in_range = (i >= range_s && i <= range_e);
+
+                auto row = hbox({
+                    text(i == state->selected ? " ▶ " : "   "),
+                    text(t.title)
+                        | (i == state->selected ? bold : nothing)
+                        | (cached ? color(Color::Green) : color(Color::White)),
+                    filler(),
+                    text(in_range ? "◆" : " ") | color(Color::Cyan),
+                    text(cached ? "✓" : " ") | color(Color::Green),
+                    text("  " + std::to_string(t.word_count) + "字") | color(Color::GrayDark),
+                });
+                if (i == state->selected) row = row | inverted;
+                toc_rows.push_back(row);
+            }
+        } // end toc window block
 
         // 进度条（下载中显示）
         Element progress_bar = emptyElement();
@@ -255,7 +482,29 @@ ftxui::Component make_book_detail_screen(
             });
         }
 
+        // 范围信息文本
+        std::string range_info;
+        if (total_chapters == 0) {
+            range_info = "无章节";
+        } else if (range_s == 0 && range_e == total_chapters - 1) {
+            range_info = "全部 " + std::to_string(total_chapters) + " 章";
+        } else {
+            range_info = "第 " + std::to_string(range_s + 1) + " - "
+                       + std::to_string(range_e + 1) + " 章 (共 "
+                       + std::to_string(selected_count) + " 章)";
+        }
+
         return vbox({
+            hbox({
+                text(" 书籍详情 ") | bold | color(Color::Cyan),
+                text("  "),
+                btn_back->Render(),
+                btn_close->Render(),
+                filler(),
+                text("ESC") | bold,
+                text(":返回"),
+            }) | color(Color::GrayDark),
+            separator(),
             // 书籍信息头
             hbox({
                 vbox({
@@ -269,24 +518,57 @@ ftxui::Component make_book_detail_screen(
             // 简介
             paragraph(state->book.abstract) | color(Color::GrayLight) | flex_shrink,
             separator(),
-            // 目录
+            // 操作按钮栏
             hbox({
                 text(" 目录 (") | bold,
-                text(std::to_string(state->toc.size()) + " 章)") | bold,
+                text(std::to_string(state->toc.size()) + " 章) ") | bold,
+                btn_download->Render(),
+                btn_refresh->Render(),
+                btn_epub->Render(),
+                btn_txt->Render(),
+                btn_clear->Render(),
                 filler(),
-                text(" g") | bold, text(":下载全部  "),
-                text(" [") | bold, text(":起点  "),
-                text(" ]") | bold, text(":终点  "),
-                text(" c") | bold, text(":清范围  "),
-                text(" e") | bold, text(":导出EPUB  "),
-                text(" t") | bold, text(":导出TXT  "),
-                text(" ESC") | bold, text(":返回"),
+                ([&]() -> Element {
+                    int total = static_cast<int>(state->toc.size());
+                    int vis   = bd_vis_count();
+                    if (total > vis) {
+                        int t_end = std::min(state->scroll_offset + vis, total);
+                        return text(std::to_string(state->scroll_offset + 1) + "-"
+                                  + std::to_string(t_end) + "/"
+                                  + std::to_string(total)) | color(Color::GrayDark);
+                    }
+                    return emptyElement();
+                })()
             }),
-            text("  " + range_text) | color(Color::GrayDark),
+            // 范围输入栏
+            hbox({
+                text("  导出范围：第 "),
+                input_start->Render() | size(WIDTH, EQUAL, 6),
+                text(" 章 到 第 "),
+                input_end->Render() | size(WIDTH, EQUAL, 6),
+                text(" 章  "),
+                text("(当前: " + range_info + ")") | color(Color::GrayDark),
+            }),
             separator(),
+            // 快捷键提示
+            hbox({
+                text("  ") | color(Color::GrayDark),
+                text("↑↓/jk") | bold, text(":导航  "),
+                text("Enter") | bold, text(":应用范围  "),
+                text("u") | bold, text(":更新章节  "),
+                text("g") | bold, text(":下载  "),
+                text("e") | bold, text(":EPUB  "),
+                text("t") | bold, text(":TXT  "),
+                text("c") | bold, text(":清除  "),
+                text("a") | bold, text(":加书架  "),
+                text("q") | bold, text(":关闭应用  "),
+                text("ESC") | bold, text(":返回"),
+            }) | color(Color::GrayDark),
+            separator(),
+            // 目录列表
             state->loading && state->toc.empty()
-              ? text("  加载中…") | color(Color::Yellow)
-              : vbox(toc_rows) | frame | flex,
+              ? ((text("  加载中…") | color(Color::Yellow) | flex) | reflect(*toc_box))
+              : ((vbox(toc_rows) | flex) | reflect(*toc_box)),
             progress_bar,
             separator(),
             text("  " + state->status_msg) | color(Color::Green),
@@ -294,55 +576,73 @@ ftxui::Component make_book_detail_screen(
     });
 
     auto handler = CatchEvent(renderer, [=, &screen](Event ev) {
+        // ESC 返回
         if (ev == Event::Escape) {
             screen.ExitLoopClosure()();
             return true;
         }
+        if (ev == Event::Character('q') || ev == Event::Character('Q')) {
+            ctx->app_exit_requested = true;
+            screen.PostEvent(Event::Custom);
+            screen.ExitLoopClosure()();
+            return true;
+        }
+
+        // ── 鼠标滚轮 ──────────────────────────────────────────
+        if (ev.is_mouse() && ev.mouse().button == Mouse::WheelUp) {
+            std::lock_guard lock(state->mtx);
+            if (state->scroll_offset > 0) --state->scroll_offset;
+            return true;
+        }
+        if (ev.is_mouse() && ev.mouse().button == Mouse::WheelDown) {
+            std::lock_guard lock(state->mtx);
+            int vis     = bd_vis_count();
+            int max_off = std::max(0, static_cast<int>(state->toc.size()) - vis);
+            if (state->scroll_offset < max_off) ++state->scroll_offset;
+            return true;
+        }
+
+        // ── 导航 ────────────────────────────────────────────────
         if (ev == Event::ArrowDown || ev == Event::Character('j')) {
             std::lock_guard lock(state->mtx);
             if (state->selected < static_cast<int>(state->toc.size()) - 1)
                 ++state->selected;
+            bd_ensure_vis();
             return true;
         }
         if (ev == Event::ArrowUp || ev == Event::Character('k')) {
             std::lock_guard lock(state->mtx);
             if (state->selected > 0) --state->selected;
+            bd_ensure_vis();
             return true;
         }
+
+        // Enter 键：如果在输入框则应用范围，否则打开详情（这里没有详情，所以只应用范围）
+        if (ev == Event::Return) {
+            if (input_start->Focused() || input_end->Focused()) {
+                validate_and_apply_range();
+                return true;
+            }
+            // 如果不在输入框，Enter 也应用范围
+            validate_and_apply_range();
+            return true;
+        }
+
+        // 快捷键
         if (ev == Event::Character('g')) { download_all(); return true; }
+        if (ev == Event::Character('u')) { refresh_toc();  return true; }
         if (ev == Event::Character('e')) { export_epub();  return true; }
         if (ev == Event::Character('t')) { export_txt();   return true; }
-        if (ev == Event::Character('[')) {
-            std::lock_guard lock(state->mtx);
-            if (!state->toc.empty()) {
-                state->range_start = state->selected;
-                state->status_msg = "已设置导出起点：第 "
-                                  + std::to_string(state->selected + 1) + " 章";
-            }
-            return true;
-        }
-        if (ev == Event::Character(']')) {
-            std::lock_guard lock(state->mtx);
-            if (!state->toc.empty()) {
-                state->range_end = state->selected;
-                state->status_msg = "已设置导出终点：第 "
-                                  + std::to_string(state->selected + 1) + " 章";
-            }
-            return true;
-        }
-        if (ev == Event::Character('c')) {
-            std::lock_guard lock(state->mtx);
-            state->range_start = -1;
-            state->range_end = -1;
-            state->status_msg = "已清除导出范围（恢复全部章节）";
-            return true;
-        }
+        if (ev == Event::Character('c')) { clear_range();  return true; }
+
+        // 加入书架
         if (ev == Event::Character('a')) {
             ctx->db->save_book(state->book);
             std::lock_guard lock(state->mtx);
             state->status_msg = "已加入书架";
             return true;
         }
+
         return false;
     });
 

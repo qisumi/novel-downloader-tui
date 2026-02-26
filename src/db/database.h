@@ -24,6 +24,7 @@ public:
     // ── 目录缓存 ───────────────────────────────────────────────
     void        save_toc(const std::string& book_id, const std::vector<TocItem>& toc);
     std::vector<TocItem> get_toc(const std::string& book_id);
+    int         toc_count(const std::string& book_id);
 
     // ── 章节缓存 ───────────────────────────────────────────────
     void        save_chapter(const std::string& book_id, const Chapter& ch);
