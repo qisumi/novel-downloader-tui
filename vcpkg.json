@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "fanqie-downloader-tui",
   "version": "0.1.0",
   "description": "番茄小说 TUI 下载器 —— 基于 FTXUI + SQLite",
@@ -41,6 +40,14 @@
     {
       "name": "spdlog",
       "version>=": "1.13.0"
+    },
+    {
+      "name": "lua",
+      "version>=": "5.4.8"
+    },
+    {
+      "name": "luabridge3",
+      "version>=": "3.0-rc3"
     }
   ]
 }

@@ -24,6 +24,8 @@
 | [tinyxml2](https://github.com/leethomason/tinyxml2) | EPUB XML 文件生成 |
 | [libzip](https://libzip.org/) | EPUB ZIP 打包 |
 | [OpenSSL](https://www.openssl.org/) | HTTPS 支持 |
+| [Lua](https://www.lua.org/) | 脚本支持 |
+| [LuaBridge3](https://github.com/kunitoki/LuaBridge3) | Lua/C++ 绑定 |
 | [VCPKG](https://vcpkg.io/) | 依赖管理 |
 
 ## 目录结构

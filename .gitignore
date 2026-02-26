@@ -13,6 +13,7 @@ build/
 out/
 *.epub
 fanqie.db
+*.txt
 
 # Ignore IDE and editor files
 .vs/

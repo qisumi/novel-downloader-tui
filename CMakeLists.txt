@@ -15,6 +15,8 @@ find_package(libzip CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(Lua REQUIRED)
+find_path(LUABRIDGE3_INCLUDE_DIRS "luabridge3/LuaBridge/Array.h" REQUIRED)
 
 # ── 源文件 ──────────────────────────────────────────────────────────────────
 set(SOURCES
@@ -45,6 +47,8 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${LUABRIDGE3_INCLUDE_DIRS}
+    ${LUA_INCLUDE_DIR}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -60,6 +64,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     OpenSSL::Crypto
     CLI11::CLI11
     spdlog::spdlog
+    ${LUA_LIBRARIES}
 )
 
 # Windows 下防止控制台乱码
