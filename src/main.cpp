@@ -85,11 +85,27 @@ int main(int argc, char *argv[]) {
   // 启用 UTF-8 控制台输出
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
-  // 启用虚拟终端（ANSI 序列）
+  
+  // 启用虚拟终端（ANSI 序列）- 输出
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-  DWORD mode = 0;
-  GetConsoleMode(hOut, &mode);
-  SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  DWORD outMode = 0;
+  GetConsoleMode(hOut, &outMode);
+  SetConsoleMode(hOut, outMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+  
+  // 启用鼠标输入 - 输入
+  HANDLE hIn = GetStdHandle(STD_INPUT_HANDLE);
+  DWORD inMode = 0;
+  GetConsoleMode(hIn, &inMode);
+  DWORD newInMode = inMode;
+  newInMode |= ENABLE_EXTENDED_FLAGS;
+  newInMode |= ENABLE_MOUSE_INPUT;
+#ifdef ENABLE_VIRTUAL_TERMINAL_INPUT
+  newInMode |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+#endif
+#ifdef ENABLE_QUICK_EDIT_MODE
+  newInMode &= ~ENABLE_QUICK_EDIT_MODE;
+#endif
+  SetConsoleMode(hIn, newInMode);
 #endif
 
   // ── 初始化日志（最先执行，方便后续所有代码都能记录日志）─────

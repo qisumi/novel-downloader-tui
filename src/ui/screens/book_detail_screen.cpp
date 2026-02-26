@@ -591,14 +591,15 @@ ftxui::Component make_book_detail_screen(
         // ── 鼠标滚轮 ──────────────────────────────────────────
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelUp) {
             std::lock_guard lock(state->mtx);
-            if (state->scroll_offset > 0) --state->scroll_offset;
+            if (state->selected > 0) --state->selected;
+            bd_ensure_vis();
             return true;
         }
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelDown) {
             std::lock_guard lock(state->mtx);
-            int vis     = bd_vis_count();
-            int max_off = std::max(0, static_cast<int>(state->toc.size()) - vis);
-            if (state->scroll_offset < max_off) ++state->scroll_offset;
+            if (state->selected < static_cast<int>(state->toc.size()) - 1)
+                ++state->selected;
+            bd_ensure_vis();
             return true;
         }
 

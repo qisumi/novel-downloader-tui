@@ -179,13 +179,14 @@ ftxui::Component make_bookshelf_screen(
     auto handler = CatchEvent(renderer, [=, &screen](Event ev) {
         // ── 鼠标滚轮 ────────────────────────────────────────────
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelUp) {
-            if (state->scroll_offset > 0) --state->scroll_offset;
+            if (state->selected > 0) --state->selected;
+            bs_ensure_vis();
             return true;
         }
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelDown) {
-            int vis     = bs_vis_count();
-            int max_off = std::max(0, static_cast<int>(state->books.size()) - vis);
-            if (state->scroll_offset < max_off) ++state->scroll_offset;
+            if (state->selected < static_cast<int>(state->books.size()) - 1)
+                ++state->selected;
+            bs_ensure_vis();
             return true;
         }
 
