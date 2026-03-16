@@ -87,8 +87,14 @@ cmake --build --preset windows-x64-release-static-msvc --clean-first
 # 指定 EPUB/TXT 输出目录
 .\build\release\fanqie-downloader-tui.exe -o C:\books
 
+# 列出当前可用书源
+.\build\release\fanqie-downloader-tui.exe --list-sources
+
+# 指定插件目录和书源
+.\build\release\fanqie-downloader-tui.exe --plugin-dir .\plugins --source fanqie
+
 # 组合使用
-.\build\release\fanqie-downloader-tui.exe -k <key> --db .\data.db -o .\epub_out
+.\build\release\fanqie-downloader-tui.exe -k <key> --db .\data.db -o .\epub_out --source fanqie
 ```
 
 ### 环境变量（替代命令行参数）
@@ -97,6 +103,8 @@ cmake --build --preset windows-x64-release-static-msvc --clean-first
 $env:FANQIE_APIKEY   = "your_api_key"      # API 密钥
 $env:FANQIE_DB       = "C:\data\fanqie.db" # SQLite 数据库路径
 $env:FANQIE_EPUB_DIR = "C:\books"          # EPUB/TXT 输出目录
+$env:FANQIE_PLUGIN_DIR = ".\plugins"       # Lua 插件目录
+$env:FANQIE_SOURCE     = "fanqie"          # 默认书源 ID
 
 .\build\release\fanqie-downloader-tui.exe
 ```
@@ -188,6 +196,7 @@ cmake --build --preset windows-x64-release-static
 
 # 产物：
 #   .\build\release-static\fanqie-downloader-tui.exe
+#   .\build\release-static\plugins\
 ```
 
 ```text

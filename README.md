@@ -3,7 +3,7 @@
 基于 **番茄小说 API** 的终端界面（TUI）小说下载与 EPUB/TXT 导出工具，  
 使用 C++20 编写。
 
-支持通过命令行参数、系统环境变量或项目根目录下的 `.env` 文件配置 API Key、数据库路径和导出目录。
+支持通过命令行参数、系统环境变量或项目根目录下的 `.env` 文件配置 API Key、数据库路径、导出目录和书源插件目录。
 
 ## 功能一览
 
@@ -15,6 +15,7 @@
 | 下载 | 批量下载全书章节并缓存到 SQLite |
 | EPUB/TXT | 支持 EPUB 或 TXT 导出，支持按章节范围导出 |
 | 鼠标支持 | 滚轮滚动、左键点击选择、按钮点击操作 |
+| 插件书源 | 从程序同级 `plugins/` 目录加载 Lua 书源 |
 
 ## 技术栈
 
@@ -37,6 +38,9 @@
 fanqie-downloader-tui/
 ├── CMakeLists.txt
 ├── vcpkg.json                  # VCPKG 清单
+├── plugins/                    # Lua 书源插件目录
+│   ├── fanqie.lua              # 默认番茄书源
+│   └── README.md
 ├── reference/
 │   └── fanqie.json             # API 参考（阅读 3 书源）
 └── src/
@@ -142,8 +146,8 @@ FANQIE_EPUB_DIR=.
 
 ```powershell
 .\build\release\fanqie-downloader-tui.exe -k <key>
-.\build\release\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books
-.\build\release-static\fanqie-downloader-tui.exe -k <key> --db .\fanqie.db -o .\books
+.\build\release\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books --plugin-dir .\plugins
+.\build\release-static\fanqie-downloader-tui.exe -k <key> --db .\fanqie.db -o .\books --source fanqie
 ```
 
 ## 操作方式

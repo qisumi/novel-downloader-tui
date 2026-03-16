@@ -50,7 +50,7 @@ ftxui::Component make_search_screen(
         screen.PostEvent(Event::Custom);
 
         std::thread([=, &screen]() {
-            auto results = ctx->client->search(state->keyword);
+            auto results = ctx->library_service->search_books(state->keyword);
             spdlog::info("search_screen: received {} results for '{}'",
                          results.size(), state->keyword);
             std::lock_guard lock(state->mtx);
@@ -91,7 +91,7 @@ ftxui::Component make_search_screen(
             state->selected >= 0 &&
             state->selected < static_cast<int>(state->results.size())) {
             const auto& book = state->results[state->selected];
-            ctx->db->save_book(book);
+            ctx->library_service->save_to_bookshelf(book);
             ctx->bookshelf_dirty = true;
             state->status_msg = "已加入书架：" + book.title;
             spdlog::info("search_screen: added book '{}' (id={}) to bookshelf",
@@ -151,7 +151,7 @@ ftxui::Component make_search_screen(
         Elements result_elements;
         for (int i = r_start; i < r_end; ++i) {
             const auto& b = state->results[i];
-            int cached = ctx->db->cached_chapter_count(b.book_id);
+            int cached = ctx->library_service->cached_chapter_count(b.book_id);
             bool is_selected = (i == state->selected);
 
             auto row = hbox({

@@ -79,18 +79,12 @@ ftxui::Component make_book_detail_screen(
                 if (!force_remote) {
                     // 优先读本地缓存
                     spdlog::debug("book_detail_screen: trying to load toc from cache");
-                    toc = ctx->db->get_toc(state->book.book_id);
+                    toc = ctx->library_service->load_toc(state->book, false);
                     spdlog::debug("book_detail_screen: loaded {} items from cache", toc.size());
                 }
-                if (toc.empty()) {
-                    spdlog::debug("book_detail_screen: cache empty, fetching from API");
-                    toc = ctx->client->get_toc(state->book.book_id);
-                    if (!toc.empty()) {
-                        spdlog::debug("book_detail_screen: saving book info to database");
-                        ctx->db->save_book(state->book);
-                        spdlog::debug("book_detail_screen: saving {} items to cache", toc.size());
-                        ctx->db->save_toc(state->book.book_id, toc);
-                    }
+                if (toc.empty() || force_remote) {
+                    spdlog::debug("book_detail_screen: loading toc via library service");
+                    toc = ctx->library_service->load_toc(state->book, true);
                 }
             std::lock_guard lock(state->mtx);
             int old_total = static_cast<int>(state->toc.size());
@@ -149,27 +143,28 @@ ftxui::Component make_book_detail_screen(
         state->status_msg = "开始下载…";
 
         auto toc_copy = state->toc;
-        auto book_id  = state->book.book_id;
+        auto book_copy = state->book;
         std::thread([=, &screen]() {
-            for (int i = 0; i < static_cast<int>(toc_copy.size()); ++i) {
-                const auto& t = toc_copy[i];
-                if (!ctx->db->chapter_cached(t.item_id)) {
-                    auto ch = ctx->client->get_chapter(t.item_id);
-                    if (ch) {
-                        ch->title = t.title;
-                        ctx->db->save_chapter(book_id, *ch);
-                    }
-                }
-                {
-                    std::lock_guard lock(state->mtx);
-                    state->dl_current = i + 1;
-                }
+            try {
+                ctx->download_service->download_book(
+                    book_copy,
+                    toc_copy,
+                    [=, &screen](int current, int total) {
+                        std::lock_guard lock(state->mtx);
+                        state->dl_current = current;
+                        state->dl_total = total;
+                        screen.PostEvent(Event::Custom);
+                    });
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = "下载完成！";
+                screen.PostEvent(Event::Custom);
+            } catch (const std::exception& e) {
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = "下载失败：" + std::string(e.what());
                 screen.PostEvent(Event::Custom);
             }
-            std::lock_guard lock(state->mtx);
-            state->loading    = false;
-            state->status_msg = "下载完成！";
-            screen.PostEvent(Event::Custom);
         }).detach();
     };
 
@@ -221,68 +216,41 @@ ftxui::Component make_book_detail_screen(
         screen.PostEvent(Event::Custom);
 
         std::thread([=, &screen]() {
-            std::vector<Chapter> chapters;
-            chapters.reserve(std::max(0, end - start + 1));
+            try {
+                std::string path = ctx->export_service->export_book(
+                    book_copy,
+                    toc_copy,
+                    start,
+                    end,
+                    as_epub,
+                    ctx->epub_output_dir,
+                    [=, &screen](int cur, int tot) {
+                        std::lock_guard lock(state->mtx);
+                        state->dl_current = cur;
+                        state->dl_total = tot;
+                        state->status_msg = "准备章节中…";
+                        screen.PostEvent(Event::Custom);
+                    },
+                    [=, &screen](int cur, int tot) {
+                        std::lock_guard lock(state->mtx);
+                        state->dl_current = cur;
+                        state->dl_total = tot;
+                        state->status_msg = as_epub ? "正在打包 EPUB…" : "正在写入 TXT…";
+                        screen.PostEvent(Event::Custom);
+                    });
 
-            for (int i = start; i <= end; ++i) {
-                const auto& t = toc_copy[i];
-                auto ch = ctx->db->get_chapter(t.item_id);
-                if (!ch) {
-                    ch = ctx->client->get_chapter(t.item_id);
-                    if (ch) {
-                        ch->title = t.title;
-                        ctx->db->save_chapter(book_copy.book_id, *ch);
-                    }
-                }
-                if (ch) {
-                    ch->title = t.title;
-                    chapters.push_back(*ch);
-                }
-
-                {
-                    std::lock_guard lock(state->mtx);
-                    state->dl_current = i - start + 1;
-                    state->status_msg = "准备章节中…";
-                }
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = path.empty()
+                    ? (as_epub ? "EPUB 导出失败" : "TXT 导出失败")
+                    : ("已导出：" + path);
+                screen.PostEvent(Event::Custom);
+            } catch (const std::exception& e) {
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = "导出失败：" + std::string(e.what());
                 screen.PostEvent(Event::Custom);
             }
-
-            std::string path;
-            auto suffix = make_range_suffix(start, end, static_cast<int>(toc_copy.size()));
-            if (as_epub) {
-                EpubOptions opts;
-                opts.output_dir = ctx->epub_output_dir;
-                opts.filename_suffix = suffix;
-                path = EpubExporter::export_book(book_copy, chapters, opts,
-                    [=, &screen](int cur, int tot) {
-                        std::lock_guard lock(state->mtx);
-                        state->dl_current = cur;
-                        state->dl_total   = tot;
-                        state->status_msg = "正在打包 EPUB…";
-                        screen.PostEvent(Event::Custom);
-                    });
-            } else {
-                TxtOptions opts;
-                opts.output_dir = ctx->epub_output_dir;
-                opts.filename_suffix = suffix;
-                path = TxtExporter::export_book(book_copy, chapters, opts,
-                    [=, &screen](int cur, int tot) {
-                        std::lock_guard lock(state->mtx);
-                        state->dl_current = cur;
-                        state->dl_total   = tot;
-                        state->status_msg = "正在写入 TXT…";
-                        screen.PostEvent(Event::Custom);
-                    });
-            }
-
-            std::lock_guard lock(state->mtx);
-            state->loading    = false;
-            if (path.empty()) {
-                state->status_msg = as_epub ? "EPUB 导出失败" : "TXT 导出失败";
-            } else {
-                state->status_msg = "已导出：" + path;
-            }
-            screen.PostEvent(Event::Custom);
         }).detach();
     };
 
@@ -492,7 +460,7 @@ ftxui::Component make_book_detail_screen(
 
             for (int i = t_start; i < t_end; ++i) {
                 const auto& t = state->toc[i];
-                bool cached  = ctx->db->chapter_cached(t.item_id);
+                bool cached  = ctx->library_service->chapter_cached(t.item_id);
                 bool in_range = (i >= range_s && i <= range_e);
 
                 auto row = hbox({
@@ -764,7 +732,7 @@ ftxui::Component make_book_detail_screen(
 
         // 加入书架
         if (ev == Event::Character('a')) {
-            ctx->db->save_book(state->book);
+            ctx->library_service->save_to_bookshelf(state->book);
             std::lock_guard lock(state->mtx);
             state->status_msg = "已加入书架";
             return true;

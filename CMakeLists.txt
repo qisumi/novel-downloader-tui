@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(fanqie-downloader-tui VERSION 0.1.0 LANGUAGES CXX)
+project(fanqie-downloader-tui VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,8 +22,19 @@ find_path(LUABRIDGE3_INCLUDE_DIRS "luabridge3/LuaBridge/Array.h" REQUIRED)
 set(SOURCES
     src/main.cpp
 
-    # 数据层 / API
-    src/api/fanqie_client.cpp
+    # Source / Plugin Runtime
+    src/source/host/http_service.cpp
+    src/source/host/json_bridge.cpp
+    src/source/host/host_api.cpp
+    src/source/lua/lua_runtime.cpp
+    src/source/lua/lua_source_schema.cpp
+    src/source/lua/lua_book_source.cpp
+    src/source/runtime/source_manager.cpp
+
+    # Application Services
+    src/application/library_service.cpp
+    src/application/download_service.cpp
+    src/application/export_service.cpp
 
     # 数据库层
     src/db/database.cpp
@@ -96,7 +107,16 @@ if (WIN32)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
                 $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/plugins
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins
             COMMAND_EXPAND_LISTS
+        )
+    else()
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/plugins
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins
         )
     endif()
 endif()
@@ -104,6 +124,10 @@ endif()
 # ── 安装 ────────────────────────────────────────────────────────────────────
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
+)
+
+install(DIRECTORY plugins/
+    DESTINATION bin/plugins
 )
 
 if (WIN32 AND NOT IS_STATIC_TRIPLET)

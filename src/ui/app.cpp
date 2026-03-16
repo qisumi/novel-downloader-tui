@@ -60,6 +60,7 @@ int run_app(std::shared_ptr<AppContext> ctx) {
             // ── 顶部标题栏 ────────────────────────────────────
             hbox({
                 text(" 🍅 番茄小说 TUI ") | bold | color(Color::Red),
+                text("[" + ctx->current_source_name + "]") | color(Color::Yellow),
                 text("  "),
                 back_btn->Render(),
                 close_btn->Render(),

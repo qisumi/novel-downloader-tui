@@ -1,6 +1,6 @@
 {
   "name": "fanqie-downloader-tui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "番茄小说 TUI 下载器 —— 基于 FTXUI + SQLite",
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c",
   "dependencies": [

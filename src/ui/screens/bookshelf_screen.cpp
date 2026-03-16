@@ -26,7 +26,7 @@ ftxui::Component make_bookshelf_screen(
 
     // 刷新书架列表
     auto refresh = [=]() {
-        state->books = ctx->db->list_bookshelf();
+        state->books = ctx->library_service->list_bookshelf();
         state->selected = std::min(state->selected,
                                    std::max(0, static_cast<int>(state->books.size()) - 1));
         state->status_msg.clear();
@@ -50,7 +50,7 @@ ftxui::Component make_bookshelf_screen(
             state->selected = std::min(state->selected,
                                        std::max(0, static_cast<int>(state->books.size()) - 1));
             std::string bid = state->books[state->selected].book_id;
-            ctx->db->remove_book(bid);
+            ctx->library_service->remove_from_bookshelf(bid);
             state->status_msg = "已从书架删除";
             refresh();
         }
@@ -108,8 +108,8 @@ ftxui::Component make_bookshelf_screen(
         Elements rows;
         for (int i = list_start; i < list_end; ++i) {
             const auto& b = state->books[i];
-            int cached = ctx->db->cached_chapter_count(b.book_id);
-            int toc_total = ctx->db->toc_count(b.book_id);
+            int cached = ctx->library_service->cached_chapter_count(b.book_id);
+            int toc_total = ctx->library_service->toc_count(b.book_id);
             std::string status_flag = b.creation_status == 1 ? "完结" : "连载";
             std::string toc_text = toc_total > 0
                 ? ("章节:" + std::to_string(toc_total))
