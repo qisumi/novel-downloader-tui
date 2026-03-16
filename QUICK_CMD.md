@@ -176,6 +176,12 @@ cmake --build --preset windows-x64-release-static
 #   .\build\release-static\fanqie-downloader-tui.exe
 ```
 
+```text
+GitHub Actions：
+- 推送形如 v1.2.3 的 tag 后，会自动构建 windows-static 包并发布 GitHub Release
+- 工作流文件：.github/workflows/release-windows-static.yml
+```
+
 ```powershell
 # 备选：动态链接发布
 cmake --preset windows-x64-release

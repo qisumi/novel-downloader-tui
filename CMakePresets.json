@@ -12,8 +12,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER": "clang-cl",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+        "CMAKE_CXX_COMPILER": "clang-cl"
       }
     },
     {
@@ -27,8 +26,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER": "clang-cl",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+        "CMAKE_CXX_COMPILER": "clang-cl"
       }
     },
     {
@@ -42,8 +40,7 @@
         "VCPKG_TARGET_TRIPLET": "x64-windows-static",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "CMAKE_C_COMPILER": "clang-cl",
-        "CMAKE_CXX_COMPILER": "clang-cl",
-        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+        "CMAKE_CXX_COMPILER": "clang-cl"
       }
     }
   ],
