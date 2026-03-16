@@ -57,6 +57,7 @@ jobs:
           New-Item -ItemType Directory -Path $staging_dir -Force | Out-Null
 
           Copy-Item ".\build\release-static-msvc\fanqie-downloader-tui.exe" $staging_dir
+          Copy-Item ".\build\release-static-msvc\plugins" -Destination $staging_dir -Recurse
           Copy-Item ".\README.md" $staging_dir
           Copy-Item ".\.env.example" $staging_dir
 
