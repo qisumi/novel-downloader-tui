@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to build and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,11 +18,14 @@ jobs:
   build-and-release:
     runs-on: windows-latest
     env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref_name }}
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
 
       - name: Setup Visual Studio developer command prompt
         uses: ilammy/msvc-dev-cmd@v1
@@ -43,7 +52,7 @@ jobs:
       - name: Prepare package
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = "${{ env.RELEASE_TAG }}"
           $package_name = "fanqie-downloader-tui-$tag-windows-static"
           $staging_dir = Join-Path $env:RUNNER_TEMP $package_name
           New-Item -ItemType Directory -Path $staging_dir -Force | Out-Null
@@ -63,5 +72,6 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           files: ${{ env.ASSET_PATH }}
           generate_release_notes: true
