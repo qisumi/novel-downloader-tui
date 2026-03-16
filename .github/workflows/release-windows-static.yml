@@ -31,7 +31,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          toolset: clangcl
 
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
