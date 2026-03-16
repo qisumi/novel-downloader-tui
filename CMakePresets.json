@@ -42,6 +42,18 @@
         "CMAKE_C_COMPILER": "clang-cl",
         "CMAKE_CXX_COMPILER": "clang-cl"
       }
+    },
+    {
+      "name": "windows-x64-release-static-msvc",
+      "displayName": "Windows x64 Release Static (MSVC cl)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-static-msvc",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -56,6 +68,10 @@
     {
       "name": "windows-x64-release-static",
       "configurePreset": "windows-x64-release-static"
+    },
+    {
+      "name": "windows-x64-release-static-msvc",
+      "configurePreset": "windows-x64-release-static-msvc"
     }
   ]
 }

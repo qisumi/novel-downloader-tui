@@ -23,6 +23,9 @@ cmake --preset windows-x64-release
 
 # Release 配置（静态链接，优先用于单 exe 发布，输出目录：build/release-static/）
 cmake --preset windows-x64-release-static
+
+# Release 配置（静态链接，MSVC 版，主要供 GitHub Actions 发布，输出目录：build/release-static-msvc/）
+cmake --preset windows-x64-release-static-msvc
 ```
 
 ---
@@ -39,12 +42,16 @@ cmake --build --preset windows-x64-release
 # Release 构建（静态链接，单 exe 优先）
 cmake --build --preset windows-x64-release-static
 
+# Release 构建（静态链接，MSVC 版）
+cmake --build --preset windows-x64-release-static-msvc
+
 # 仅重新编译更改的文件（增量构建，同上命令）
 
 # 强制全量重新构建
 cmake --build --preset windows-x64-debug --clean-first
 cmake --build --preset windows-x64-release --clean-first
 cmake --build --preset windows-x64-release-static --clean-first
+cmake --build --preset windows-x64-release-static-msvc --clean-first
 ```
 
 ---
@@ -60,6 +67,9 @@ cmake --build --preset windows-x64-release-static --clean-first
 
 # Release（静态链接）
 .\build\release-static\fanqie-downloader-tui.exe
+
+# Release（静态链接，MSVC 版）
+.\build\release-static-msvc\fanqie-downloader-tui.exe
 
 # 查看帮助
 .\build\debug\fanqie-downloader-tui.exe --help
@@ -157,10 +167,14 @@ cmake --build --preset windows-x64-release --target clean
 # 清理 Release 构建产物（静态链接）
 cmake --build --preset windows-x64-release-static --target clean
 
+# 清理 Release 构建产物（静态链接，MSVC 版）
+cmake --build --preset windows-x64-release-static-msvc --target clean
+
 # 删除全部构建目录（彻底重置）
 Remove-Item -Recurse -Force .\build\debug
 Remove-Item -Recurse -Force .\build\release
 Remove-Item -Recurse -Force .\build\release-static
+Remove-Item -Recurse -Force .\build\release-static-msvc
 ```
 
 ---
@@ -179,6 +193,7 @@ cmake --build --preset windows-x64-release-static
 ```text
 GitHub Actions：
 - 推送形如 v1.2.3 的 tag 后，会自动构建 windows-static 包并发布 GitHub Release
+- CI 发布默认使用 windows-x64-release-static-msvc 预设，避免 clang-cl 在 Runner 上的链接兼容问题
 - 工作流文件：.github/workflows/release-windows-static.yml
 ```
 

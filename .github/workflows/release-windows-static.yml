@@ -41,11 +41,11 @@ jobs:
           vcpkgJsonGlob: vcpkg.json
 
       - name: Configure
-        run: cmake --preset windows-x64-release-static
+        run: cmake --preset windows-x64-release-static-msvc
         shell: pwsh
 
       - name: Build
-        run: cmake --build --preset windows-x64-release-static --clean-first
+        run: cmake --build --preset windows-x64-release-static-msvc --clean-first
         shell: pwsh
 
       - name: Prepare package
@@ -56,7 +56,7 @@ jobs:
           $staging_dir = Join-Path $env:RUNNER_TEMP $package_name
           New-Item -ItemType Directory -Path $staging_dir -Force | Out-Null
 
-          Copy-Item ".\build\release-static\fanqie-downloader-tui.exe" $staging_dir
+          Copy-Item ".\build\release-static-msvc\fanqie-downloader-tui.exe" $staging_dir
           Copy-Item ".\README.md" $staging_dir
           Copy-Item ".\.env.example" $staging_dir
 
