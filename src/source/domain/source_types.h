@@ -10,11 +10,6 @@ struct SourceInfo {
     std::string version;
     std::string author;
     std::string description;
-    bool        requires_api_key = false;
-};
-
-struct SourceContext {
-    std::string api_key;
 };
 
 struct SourceCapabilities {

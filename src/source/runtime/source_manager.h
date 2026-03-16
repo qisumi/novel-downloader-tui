@@ -20,7 +20,7 @@ public:
     bool select_source(const std::string& source_id);
     std::shared_ptr<IBookSource> current_source() const;
     std::optional<SourceInfo> current_info() const;
-    void configure_current(const SourceContext& context);
+    void configure_current();
 
 private:
     std::shared_ptr<HostApi>                   host_api_;

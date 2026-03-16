@@ -16,7 +16,7 @@ public:
     virtual const SourceInfo& info() const = 0;
     virtual const SourceCapabilities& capabilities() const = 0;
 
-    virtual void configure(const SourceContext& context) = 0;
+    virtual void configure() = 0;
 
     virtual std::vector<Book> search(const std::string& keywords, int page) = 0;
     virtual std::optional<Book> get_book_info(const std::string& book_id) = 0;

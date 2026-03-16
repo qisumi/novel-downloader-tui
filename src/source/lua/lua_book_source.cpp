@@ -80,8 +80,6 @@ void LuaBookSource::load_manifest() {
     info_.description = manifest["description"].isNil()
         ? ""
         : cast_or_throw<std::string>(manifest["description"], info_.id, "manifest.description", plugin_path_);
-    info_.requires_api_key = !manifest["requires_api_key"].isNil()
-        && cast_or_throw<bool>(manifest["requires_api_key"], info_.id, "manifest.requires_api_key", plugin_path_);
 
     if (info_.id.empty() || info_.name.empty()) {
         throw SourceException({SourceErrorCode::PluginInvalidManifest, "", plugin_path_,
@@ -102,13 +100,11 @@ luabridge::LuaRef LuaBookSource::require_function(const char* name) {
     return fn;
 }
 
-void LuaBookSource::configure(const SourceContext& context) {
+void LuaBookSource::configure() {
     std::lock_guard lock(mutex_);
     luabridge::LuaRef fn = plugin_ref_["configure"];
     if (fn.isFunction()) {
-        luabridge::LuaRef ctx = luabridge::newTable(runtime_->state());
-        ctx["api_key"] = context.api_key;
-        call_to_ref(fn, info_.id, plugin_path_, "configure", ctx);
+        call_to_ref(fn, info_.id, plugin_path_, "configure");
     }
 }
 

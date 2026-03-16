@@ -23,64 +23,6 @@
 #include "source/runtime/source_manager.h"
 #include "ui/app.h"
 
-static std::string prompt_apikey() {
-    using namespace ftxui;
-
-    std::string input_val;
-    bool confirmed = false;
-
-    auto screen = ScreenInteractive::Fullscreen();
-
-    InputOption opt;
-    opt.password = false;
-    opt.on_enter = [&] {
-        confirmed = true;
-        screen.ExitLoopClosure()();
-    };
-
-    auto input_box = Input(&input_val, "在此粘贴或输入 API Key …", opt);
-    auto btn_ok = Button("  确认  ", [&] {
-        confirmed = true;
-        screen.ExitLoopClosure()();
-    }, ButtonOption::Ascii());
-    auto btn_exit = Button("  退出  ", [&] {
-        screen.ExitLoopClosure()();
-    }, ButtonOption::Ascii());
-
-    auto buttons = Container::Horizontal({btn_ok, btn_exit});
-    auto layout = Container::Vertical({input_box, buttons});
-
-    auto renderer = Renderer(layout, [&] {
-        return vbox({
-            text(" 🍅 番茄小说 TUI 下载器") | bold | color(Color::Red),
-            separator(),
-            text(""),
-            text(" 当前书源需要 API Key，请通过以下任意方式提供：") | color(Color::Yellow),
-            text("   • 命令行：-k <key>  或  --apikey <key>"),
-            text("   • 系统环境变量：FANQIE_APIKEY=<key>"),
-            text("   • .env 文件：FANQIE_APIKEY=<key>"),
-            text("   • 在下方直接输入（仅本次运行有效）"),
-            text(""),
-            separator(),
-            hbox({text(" API Key: "), input_box->Render() | flex}) | border,
-            separator(),
-            hbox({filler(), buttons->Render(), filler()}),
-            text(""),
-        }) | size(WIDTH, EQUAL, 72);
-    });
-
-    auto event_handler = CatchEvent(renderer, [&](Event ev) {
-        if (ev == Event::Escape) {
-            screen.ExitLoopClosure()();
-            return true;
-        }
-        return false;
-    });
-
-    screen.Loop(event_handler);
-    return confirmed ? input_val : "";
-}
-
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -111,7 +53,6 @@ int main(int argc, char* argv[]) {
 
     dotenv::load(".env");
 
-    std::string api_key;
     std::string db_path = "fanqie.db";
     std::string epub_dir = ".";
     std::string plugin_dir = "plugins";
@@ -119,9 +60,6 @@ int main(int argc, char* argv[]) {
     bool list_sources = false;
 
     CLI::App app{"番茄小说 TUI 下载器"};
-    app.add_option("-k,--apikey", api_key,
-                   "API 密钥 [可通过 FANQIE_APIKEY 环境变量或 .env 文件设置]")
-        ->envname("FANQIE_APIKEY");
     app.add_option("--db", db_path,
                    "SQLite 数据库路径 (可通过 FANQIE_DB 环境变量设置)")
         ->default_str(db_path)
@@ -164,16 +102,7 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
-        auto current_info = source_manager->current_info();
-        if (current_info && current_info->requires_api_key && api_key.empty()) {
-            api_key = prompt_apikey();
-            if (api_key.empty()) {
-                std::cerr << "未提供 API 密钥，程序退出。\n";
-                return 1;
-            }
-        }
-
-        source_manager->configure_current({api_key});
+        source_manager->configure_current();
 
         auto library_service = std::make_shared<fanqie::LibraryService>(source_manager, db);
         auto download_service =
@@ -186,9 +115,9 @@ int main(int argc, char* argv[]) {
         ctx->download_service = download_service;
         ctx->export_service = export_service;
         ctx->db = db;
-        ctx->api_key = api_key;
         ctx->plugin_dir = plugin_dir;
         ctx->epub_output_dir = epub_dir;
+        auto current_info = source_manager->current_info();
         if (current_info) {
             ctx->current_source_id = current_info->id;
             ctx->current_source_name = current_info->name;

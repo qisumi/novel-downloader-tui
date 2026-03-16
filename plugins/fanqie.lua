@@ -5,8 +5,7 @@ plugin.manifest = {
     name = "番茄小说",
     version = "1.0.0",
     author = "fanqie-downloader-tui",
-    description = "默认番茄小说书源插件，需要提供API Key，编写到.env文件中，或者在插件配置中填写",
-    requires_api_key = true,
+    description = "默认番茄小说书源插件，会自行从环境变量或 .env 中读取 FANQIE_APIKEY",
 }
 
 local ctx = {
@@ -46,7 +45,17 @@ local function request(url)
     return host.json_parse(body)
 end
 
+local function ensure_api_key()
+    if ctx.api_key == "" then
+        ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
+    end
+    if ctx.api_key == "" then
+        error("missing FANQIE_APIKEY; please set it in the environment or .env")
+    end
+end
+
 local function build_url(type_id, extra_params)
+    ensure_api_key()
     local url = "http://v3.rain.ink/fanqie/?apikey=" .. ctx.api_key .. "&type=" .. tostring(type_id)
     if extra_params ~= nil and extra_params ~= "" then
         url = url .. "&" .. extra_params
@@ -54,11 +63,8 @@ local function build_url(type_id, extra_params)
     return url
 end
 
-function plugin.configure(new_ctx)
-    ctx.api_key = new_ctx.api_key or ""
-    if ctx.api_key == "" then
-        ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
-    end
+function plugin.configure()
+    ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
 end
 
 function plugin.search(keywords, page)

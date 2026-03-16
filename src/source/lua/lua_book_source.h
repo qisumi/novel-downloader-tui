@@ -25,7 +25,7 @@ public:
     const SourceInfo& info() const override { return info_; }
     const SourceCapabilities& capabilities() const override { return capabilities_; }
 
-    void configure(const SourceContext& context) override;
+    void configure() override;
 
     std::vector<Book> search(const std::string& keywords, int page) override;
     std::optional<Book> get_book_info(const std::string& book_id) override;

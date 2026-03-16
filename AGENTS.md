@@ -47,9 +47,15 @@ fanqie-downloader-tui/
     ├── logger.h                # spdlog 初始化
     ├── models/
     │   └── book.h              # Book / TocItem / Chapter 数据模型
-    ├── api/
-    │   ├── fanqie_client.h     # API 客户端接口
-    │   └── fanqie_client.cpp   # API 实现（搜索、目录、章节）
+    ├── source/
+    │   ├── domain/             # 书源接口与领域类型
+    │   ├── host/               # Lua 插件宿主 API
+    │   ├── lua/                # Lua 运行时与插件适配层
+    │   └── runtime/            # 插件加载与书源管理
+    ├── application/
+    │   ├── library_service.*   # 搜索 / 书架 / 目录
+    │   ├── download_service.*  # 下载与缓存
+    │   └── export_service.*    # 导出协调
     ├── db/
     │   ├── database.h          # 数据库接口
     │   └── database.cpp        # SQLite 操作（书架、缓存）
@@ -84,7 +90,7 @@ fanqie-downloader-tui/
 | 类型 | 风格 | 示例 |
 |------|------|------|
 | 命名空间 | 小写下划线 | `fanqie::` |
-| 类/结构体 | PascalCase | `FanqieClient`, `Book` |
+| 类/结构体 | PascalCase | `SourceManager`, `Book` |
 | 函数/方法 | snake_case | `get_book_info()`, `save_book()` |
 | 变量 | snake_case | `book_id`, `toc_items` |
 | 成员变量 | snake_case + 尾下划线 | `api_key_`, `timeout_s_` |
@@ -159,29 +165,18 @@ struct Chapter {
 };
 ```
 
-### API 客户端 (`src/api/fanqie_client.h`)
+### 书源运行时 (`src/source/runtime/source_manager.h`)
 
-负责与番茄小说 API 通信，所有请求为同步调用。
+负责加载 Lua 插件、选择当前书源，并向上层暴露统一书源接口。
 
 ```cpp
-class FanqieClient {
+class SourceManager {
 public:
-    // 搜索书籍，page 从 0 开始
-    std::vector<Book> search(const std::string& keywords, int page = 0);
-    
-    // 获取书籍详情
-    std::optional<Book> get_book_info(const std::string& book_id);
-    
-    // 获取目录
-    std::vector<TocItem> get_toc(const std::string& book_id);
-    
-    // 获取单章内容
-    std::optional<Chapter> get_chapter(const std::string& item_id);
-    
-    // 批量下载（带进度回调）
-    std::vector<Chapter> download_chapters(
-        const std::vector<TocItem>& toc,
-        std::function<void(int, int)> progress_cb = nullptr);
+    void load_from_directory(const std::string& plugin_dir);
+    bool select_source(const std::string& source_id);
+    std::shared_ptr<IBookSource> current_source() const;
+    std::optional<SourceInfo> current_info() const;
+    void configure_current();
 };
 ```
 
@@ -217,12 +212,17 @@ public:
 
 ```cpp
 struct AppContext {
-    std::shared_ptr<FanqieClient> client;    // API 客户端
-    std::shared_ptr<Database>     db;        // 数据库
-    Book          current_book;               // 当前选中书籍
-    std::string   api_key;                    // API 密钥
-    std::string   epub_output_dir = ".";      // 导出目录
-    std::atomic<bool> bookshelf_dirty{false}; // 书架脏标志
+    std::shared_ptr<SourceManager>   source_manager;
+    std::shared_ptr<LibraryService>  library_service;
+    std::shared_ptr<DownloadService> download_service;
+    std::shared_ptr<ExportService>   export_service;
+    std::shared_ptr<Database>        db;
+    Book          current_book;
+    std::string   plugin_dir = "plugins";
+    std::string   current_source_id;
+    std::string   current_source_name;
+    std::string   epub_output_dir = ".";
+    std::atomic<bool> bookshelf_dirty{false};
 };
 ```
 
@@ -246,16 +246,18 @@ cmake --build --preset windows-x64-release
 ### 运行参数
 
 ```powershell
-# 直接运行（会提示输入 API Key）
+# 直接运行（插件会自行从环境变量或 .env 读取所需配置）
 .\build\release\fanqie-downloader-tui.exe
 
 # 命令行参数
-.\build\release\fanqie-downloader-tui.exe -k <api_key> --db <db_path> -o <epub_dir>
+.\build\release\fanqie-downloader-tui.exe --db <db_path> -o <epub_dir> --plugin-dir plugins --source fanqie
 
 # 环境变量
 $env:FANQIE_APIKEY = "your_key"
 $env:FANQIE_DB = "fanqie.db"
 $env:FANQIE_EPUB_DIR = "."
+$env:FANQIE_PLUGIN_DIR = "plugins"
+$env:FANQIE_SOURCE = "fanqie"
 ```
 
 ### 配置优先级
@@ -336,7 +338,7 @@ FTXUI 主线程用于渲染，网络请求等耗时操作需在后台执行：
 ```cpp
 // 使用 std::thread 执行后台任务
 std::thread([ctx, progress_cb] {
-    auto chapters = ctx->client->download_chapters(toc, progress_cb);
+    ctx->download_service->download_book(ctx->current_book, toc, progress_cb);
     // 使用 ScreenInteractive::PostEvent 通知主线程
     screen.PostEvent(Event::Custom);
 }).detach();
@@ -387,12 +389,12 @@ CREATE TABLE chapters (
 
 ## 常见开发任务
 
-### 添加新的 API 接口
+### 添加新的书源能力
 
-1. 在 `fanqie_client.h` 声明方法
-2. 在 `fanqie_client.cpp` 实现请求逻辑
-3. 使用 `http_get()` 发送请求
-4. 用 `nlohmann::json` 解析响应
+1. 在 `plugins/` 新建或修改 Lua 插件
+2. 通过 `host.http_get()` / `host.json_parse()` 调用宿主能力
+3. 返回符合 `Book` / `TocItem` / `Chapter` 结构的数据
+4. 用 `--source` 或 `SourceManager::select_source()` 切换书源
 
 ### 添加新的 UI 屏幕
 
@@ -437,7 +439,7 @@ spdlog::error("错误: {}", error_msg);
 
 1. **Windows 平台优先**：项目主要针对 Windows 开发，使用 Clang 编译
 2. **UTF-8 编码**：main.cpp 中设置了 UTF-8 控制台输出
-3. **同步 API**：`FanqieClient` 的所有方法都是同步的，UI 中需在后台线程调用
+3. **同步书源调用**：Lua 书源中的网络请求仍是同步执行，UI 中需在后台线程调用
 4. **API Key 必需**：运行时必须提供有效的番茄小说 API Key
 5. **线程安全**：`AppContext::bookshelf_dirty` 使用 `std::atomic` 保证线程安全
 

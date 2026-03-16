@@ -22,7 +22,6 @@ struct AppContext {
 
     Book        current_book;
 
-    std::string api_key;
     std::string plugin_dir = "plugins";
     std::string current_source_id;
     std::string current_source_name;

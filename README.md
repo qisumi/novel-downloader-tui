@@ -47,12 +47,18 @@ fanqie-downloader-tui/
     ├── main.cpp                # 程序入口
     ├── models/
     │   └── book.h              # Book / TocItem / Chapter 数据模型
-    ├── api/
-    │   ├── fanqie_client.h     # 番茄小说 API 客户端接口
-    │   └── fanqie_client.cpp
     ├── db/
     │   ├── database.h          # SQLite 持久化层接口
     │   └── database.cpp
+    ├── source/
+    │   ├── domain/             # 书源接口与领域类型
+    │   ├── host/               # Lua 插件可调用的宿主 API
+    │   ├── lua/                # Lua 运行时与插件适配层
+    │   └── runtime/            # 书源加载与选择
+    ├── application/
+    │   ├── library_service.*   # 搜索 / 书架 / 目录
+    │   ├── download_service.*  # 下载与缓存
+    │   └── export_service.*    # 导出协调
     ├── export/
     │   ├── epub_exporter.h     # EPUB 导出接口
     │   ├── epub_exporter.cpp
@@ -132,22 +138,26 @@ Copy-Item .env.example .env
 FANQIE_APIKEY=your_api_key
 FANQIE_DB=fanqie.db
 FANQIE_EPUB_DIR=.
+FANQIE_PLUGIN_DIR=plugins
+FANQIE_SOURCE=fanqie
 ```
 
 说明：
 
-- `FANQIE_APIKEY`：番茄小说 API Key，建议自行填写有效值
+- `FANQIE_APIKEY`：当前书源所需的 API Key，建议自行填写有效值
 - `FANQIE_DB`：SQLite 数据库文件路径
 - `FANQIE_EPUB_DIR`：EPUB/TXT 导出目录
+- `FANQIE_PLUGIN_DIR`：Lua 书源插件目录
+- `FANQIE_SOURCE`：默认书源 ID
 
 如果同时设置了 `.env`、系统环境变量和命令行参数，最终以命令行参数为准。
 
 ### 命令行示例
 
 ```powershell
-.\build\release\fanqie-downloader-tui.exe -k <key>
+.\build\release\fanqie-downloader-tui.exe
 .\build\release\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books --plugin-dir .\plugins
-.\build\release-static\fanqie-downloader-tui.exe -k <key> --db .\fanqie.db -o .\books --source fanqie
+.\build\release-static\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books --source fanqie
 ```
 
 ## 操作方式
@@ -204,9 +214,11 @@ FANQIE_EPUB_DIR=.
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `FANQIE_APIKEY` | API 密钥 | 空 |
+| `FANQIE_APIKEY` | 当前书源所需的 API 密钥 | 空 |
 | `FANQIE_DB` | SQLite 数据库路径 | `fanqie.db` |
 | `FANQIE_EPUB_DIR` | EPUB/TXT 输出目录 | 当前目录 |
+| `FANQIE_PLUGIN_DIR` | Lua 插件目录 | `plugins` |
+| `FANQIE_SOURCE` | 默认书源 ID | 首个成功加载的书源 |
 
 ## 数据库 Schema 概览
 

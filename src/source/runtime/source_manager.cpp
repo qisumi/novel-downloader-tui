@@ -110,8 +110,8 @@ std::optional<SourceInfo> SourceManager::current_info() const {
     return current_source_->info();
 }
 
-void SourceManager::configure_current(const SourceContext& context) {
-    current_source()->configure(context);
+void SourceManager::configure_current() {
+    current_source()->configure();
 }
 
 } // namespace fanqie
