@@ -18,8 +18,11 @@ vcpkg list
 # Debug 配置（输出目录：build/debug/）
 cmake --preset windows-x64-debug
 
-# Release 配置（输出目录：build/release/）
+# Release 配置（动态依赖，输出目录：build/release/）
 cmake --preset windows-x64-release
+
+# Release 配置（静态链接，优先用于单 exe 发布，输出目录：build/release-static/）
+cmake --preset windows-x64-release-static
 ```
 
 ---
@@ -30,14 +33,18 @@ cmake --preset windows-x64-release
 # Debug 构建
 cmake --build --preset windows-x64-debug
 
-# Release 构建
+# Release 构建（动态依赖）
 cmake --build --preset windows-x64-release
+
+# Release 构建（静态链接，单 exe 优先）
+cmake --build --preset windows-x64-release-static
 
 # 仅重新编译更改的文件（增量构建，同上命令）
 
 # 强制全量重新构建
 cmake --build --preset windows-x64-debug --clean-first
 cmake --build --preset windows-x64-release --clean-first
+cmake --build --preset windows-x64-release-static --clean-first
 ```
 
 ---
@@ -48,8 +55,11 @@ cmake --build --preset windows-x64-release --clean-first
 # Debug
 .\build\debug\fanqie-downloader-tui.exe
 
-# Release
+# Release（动态依赖）
 .\build\release\fanqie-downloader-tui.exe
+
+# Release（静态链接）
+.\build\release-static\fanqie-downloader-tui.exe
 
 # 查看帮助
 .\build\debug\fanqie-downloader-tui.exe --help
@@ -141,13 +151,41 @@ $env:FANQIE_EPUB_DIR = "C:\books"          # EPUB/TXT 输出目录
 # 清理 Debug 构建产物
 cmake --build --preset windows-x64-debug --target clean
 
-# 清理 Release 构建产物
+# 清理 Release 构建产物（动态依赖）
 cmake --build --preset windows-x64-release --target clean
+
+# 清理 Release 构建产物（静态链接）
+cmake --build --preset windows-x64-release-static --target clean
 
 # 删除全部构建目录（彻底重置）
 Remove-Item -Recurse -Force .\build\debug
 Remove-Item -Recurse -Force .\build\release
+Remove-Item -Recurse -Force .\build\release-static
 ```
+
+---
+
+## 发布
+
+```powershell
+# 推荐：静态链接，尽量生成单 exe 发布版
+cmake --preset windows-x64-release-static
+cmake --build --preset windows-x64-release-static
+
+# 产物：
+#   .\build\release-static\fanqie-downloader-tui.exe
+```
+
+```powershell
+# 备选：动态链接发布
+cmake --preset windows-x64-release
+cmake --build --preset windows-x64-release
+
+# 构建后会自动把依赖 DLL 复制到 exe 同目录
+# 直接打包整个 .\build\release\ 目录即可
+```
+
+> `x64-windows-static` 首次构建会由 vcpkg 重新安装一套静态库，耗时通常明显高于普通 Release。
 
 ---
 

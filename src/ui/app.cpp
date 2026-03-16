@@ -99,12 +99,22 @@ int run_app(std::shared_ptr<AppContext> ctx) {
         }
         // Tab 键切换书架/搜索标签页
         if (ev == Event::Tab) {
+            int old_tab = selected_tab;
             selected_tab = (selected_tab + 1) % static_cast<int>(tab_labels.size());
+            // 切换到书架页时，设置刷新标志
+            if (old_tab != 0 && selected_tab == 0) {
+                ctx->bookshelf_needs_refresh = true;
+            }
             return true;
         }
         if (ev == Event::TabReverse) {
+            int old_tab = selected_tab;
             selected_tab = (selected_tab + static_cast<int>(tab_labels.size()) - 1)
                            % static_cast<int>(tab_labels.size());
+            // 切换到书架页时，设置刷新标志
+            if (old_tab != 0 && selected_tab == 0) {
+                ctx->bookshelf_needs_refresh = true;
+            }
             return true;
         }
         // 书架页按键兜底转发，避免焦点链异常导致按键失效

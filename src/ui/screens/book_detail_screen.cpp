@@ -10,6 +10,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <spdlog/spdlog.h>
 
 using namespace ftxui;
 
@@ -19,12 +20,16 @@ ftxui::Component make_book_detail_screen(
     std::shared_ptr<AppContext> ctx,
     ScreenInteractive&           screen)
 {
+    spdlog::info("book_detail_screen: opened for '{}' (id={})",
+                 ctx->current_book.title, ctx->current_book.book_id);
     struct BookDetailState {
         Book               book;
         std::vector<TocItem> toc;
         int                selected      = 0;
         int                scroll_offset = 0;
+        float              abstract_scroll = 0.0f;
         bool               loading       = false;
+        bool               show_abstract_modal = false;
         int                dl_current    = 0;
         int                dl_total      = 0;
         int                range_start   = -1;
@@ -44,9 +49,23 @@ ftxui::Component make_book_detail_screen(
         state->range_start_input = "1";
         state->range_end_input = std::to_string(total);
     };
+    auto open_abstract_modal = [=]() {
+        std::lock_guard lock(state->mtx);
+        state->show_abstract_modal = true;
+        state->abstract_scroll = 0.0f;
+    };
+    auto close_abstract_modal = [=]() {
+        std::lock_guard lock(state->mtx);
+        state->show_abstract_modal = false;
+    };
+    auto scroll_abstract = [=](float delta) {
+        std::lock_guard lock(state->mtx);
+        state->abstract_scroll = std::clamp(state->abstract_scroll + delta, 0.0f, 1.0f);
+    };
 
     // ── 异步加载目录 ───────────────────────────────────────────
     auto load_toc = [=, &screen](bool force_remote) {
+        spdlog::info("book_detail_screen: load_toc() called, force_remote={}", force_remote);
         {
             std::lock_guard lock(state->mtx);
             state->loading = true;
@@ -55,16 +74,24 @@ ftxui::Component make_book_detail_screen(
         screen.PostEvent(Event::Custom);
 
         std::thread([=, &screen]() {
-            std::vector<TocItem> toc;
-            if (!force_remote) {
-                // 优先读本地缓存
-                toc = ctx->db->get_toc(state->book.book_id);
-            }
-            if (toc.empty()) {
-                toc = ctx->client->get_toc(state->book.book_id);
-                if (!toc.empty())
-                    ctx->db->save_toc(state->book.book_id, toc);
-            }
+            try {
+                std::vector<TocItem> toc;
+                if (!force_remote) {
+                    // 优先读本地缓存
+                    spdlog::debug("book_detail_screen: trying to load toc from cache");
+                    toc = ctx->db->get_toc(state->book.book_id);
+                    spdlog::debug("book_detail_screen: loaded {} items from cache", toc.size());
+                }
+                if (toc.empty()) {
+                    spdlog::debug("book_detail_screen: cache empty, fetching from API");
+                    toc = ctx->client->get_toc(state->book.book_id);
+                    if (!toc.empty()) {
+                        spdlog::debug("book_detail_screen: saving book info to database");
+                        ctx->db->save_book(state->book);
+                        spdlog::debug("book_detail_screen: saving {} items to cache", toc.size());
+                        ctx->db->save_toc(state->book.book_id, toc);
+                    }
+                }
             std::lock_guard lock(state->mtx);
             int old_total = static_cast<int>(state->toc.size());
             int old_start = state->range_start;
@@ -101,6 +128,13 @@ ftxui::Component make_book_detail_screen(
                 ? (force_remote ? "目录更新失败" : "目录加载失败")
                 : (force_remote ? "目录已更新" : "");
             screen.PostEvent(Event::Custom);
+            } catch (const std::exception& e) {
+                spdlog::error("load_toc() exception: {}", e.what());
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = "目录加载失败：" + std::string(e.what());
+                screen.PostEvent(Event::Custom);
+            }
         }).detach();
     };
     load_toc(false);
@@ -356,6 +390,12 @@ ftxui::Component make_book_detail_screen(
 
     // ── 组件创建 ───────────────────────────────────────────────
     auto toc_box = std::make_shared<Box>();
+    auto abstract_box = std::make_shared<Box>();
+    auto abstract_modal_box = std::make_shared<Box>();
+    auto mouse_inside = [](const Mouse& mouse, const Box& box) {
+        return mouse.x >= box.x_min && mouse.x <= box.x_max &&
+               mouse.y >= box.y_min && mouse.y <= box.y_max;
+    };
     // 优先使用目录区域真实高度，避免固定 overhead 导致滚动触发偏移。
     auto bd_vis_count = [=, &screen]() {
         int h = toc_box->y_max - toc_box->y_min + 1;
@@ -494,7 +534,18 @@ ftxui::Component make_book_detail_screen(
                        + std::to_string(selected_count) + " 章)";
         }
 
-        return vbox({
+        Element abstract_preview = vbox({
+            paragraph(state->book.abstract)
+                | color(Color::GrayLight)
+                | yframe
+                | flex,
+            hbox({
+                filler(),
+                text("按 i 查看完整简介") | color(Color::GrayDark),
+            }),
+        }) | reflect(*abstract_box) | size(HEIGHT, EQUAL, 6) | border;
+
+        Element main_view = vbox({
             hbox({
                 text(" 书籍详情 ") | bold | color(Color::Cyan),
                 text("  "),
@@ -515,8 +566,8 @@ ftxui::Component make_book_detail_screen(
                     text("字数：" + state->book.word_count),
                 }) | flex,
             }) | border,
-            // 简介
-            paragraph(state->book.abstract) | color(Color::GrayLight) | flex_shrink,
+            // 简介预览（固定高度，完整内容通过弹层查看）
+            abstract_preview,
             separator(),
             // 操作按钮栏
             hbox({
@@ -560,6 +611,7 @@ ftxui::Component make_book_detail_screen(
                 text("e") | bold, text(":EPUB  "),
                 text("t") | bold, text(":TXT  "),
                 text("c") | bold, text(":清除  "),
+                text("i") | bold, text(":简介  "),
                 text("a") | bold, text(":加书架  "),
                 text("q") | bold, text(":关闭应用  "),
                 text("ESC") | bold, text(":返回"),
@@ -573,9 +625,73 @@ ftxui::Component make_book_detail_screen(
             separator(),
             text("  " + state->status_msg) | color(Color::Green),
         });
+
+        if (!state->show_abstract_modal) return main_view;
+
+        Element abstract_modal = window(
+            text(" 完整简介 "),
+            vbox({
+                paragraph(state->book.abstract.empty() ? "暂无简介" : state->book.abstract)
+                    | color(Color::GrayLight)
+                    | focusPositionRelative(0.0f, state->abstract_scroll)
+                    | yframe
+                    | vscroll_indicator
+                    | flex,
+                separator(),
+                hbox({
+                    text("↑↓/jk/滚轮") | bold,
+                    text(":滚动  "),
+                    text("i") | bold,
+                    text("/"),
+                    text("ESC") | bold,
+                    text(":关闭"),
+                }) | color(Color::GrayDark),
+            }) | reflect(*abstract_modal_box) | size(WIDTH, EQUAL, std::max(40, screen.dimx() - 10))
+              | size(HEIGHT, EQUAL, std::max(8, screen.dimy() - 6)),
+            DOUBLE);
+
+        return dbox({
+            main_view | dim,
+            abstract_modal | center,
+        });
     });
 
     auto handler = CatchEvent(renderer, [=, &screen](Event ev) {
+        bool abstract_modal_open = false;
+        {
+            std::lock_guard lock(state->mtx);
+            abstract_modal_open = state->show_abstract_modal;
+        }
+
+        if (abstract_modal_open) {
+            if (ev == Event::Escape || ev == Event::Character('i') || ev == Event::Character('I')) {
+                close_abstract_modal();
+                return true;
+            }
+            if (ev == Event::ArrowUp || ev == Event::Character('k')) {
+                scroll_abstract(-0.08f);
+                return true;
+            }
+            if (ev == Event::ArrowDown || ev == Event::Character('j')) {
+                scroll_abstract(0.08f);
+                return true;
+            }
+            if (ev.is_mouse() && ev.mouse().motion == Mouse::Moved) {
+                return true;
+            }
+            if (ev.is_mouse() && ev.mouse().button == Mouse::WheelUp) {
+                if (!mouse_inside(ev.mouse(), *abstract_modal_box)) return true;
+                scroll_abstract(-0.08f);
+                return true;
+            }
+            if (ev.is_mouse() && ev.mouse().button == Mouse::WheelDown) {
+                if (!mouse_inside(ev.mouse(), *abstract_modal_box)) return true;
+                scroll_abstract(0.08f);
+                return true;
+            }
+            return true;
+        }
+
         // ESC 返回
         if (ev == Event::Escape) {
             screen.ExitLoopClosure()();
@@ -588,14 +704,20 @@ ftxui::Component make_book_detail_screen(
             return true;
         }
 
+        if (ev.is_mouse() && ev.mouse().motion == Mouse::Moved) {
+            return true;
+        }
+
         // ── 鼠标滚轮 ──────────────────────────────────────────
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelUp) {
+            if (!mouse_inside(ev.mouse(), *toc_box)) return true;
             std::lock_guard lock(state->mtx);
             if (state->selected > 0) --state->selected;
             bd_ensure_vis();
             return true;
         }
         if (ev.is_mouse() && ev.mouse().button == Mouse::WheelDown) {
+            if (!mouse_inside(ev.mouse(), *toc_box)) return true;
             std::lock_guard lock(state->mtx);
             if (state->selected < static_cast<int>(state->toc.size()) - 1)
                 ++state->selected;
@@ -635,6 +757,10 @@ ftxui::Component make_book_detail_screen(
         if (ev == Event::Character('e')) { export_epub();  return true; }
         if (ev == Event::Character('t')) { export_txt();   return true; }
         if (ev == Event::Character('c')) { clear_range();  return true; }
+        if (ev == Event::Character('i') || ev == Event::Character('I')) {
+            open_abstract_modal();
+            return true;
+        }
 
         // 加入书架
         if (ev == Event::Character('a')) {

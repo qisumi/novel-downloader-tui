@@ -1,5 +1,6 @@
 #include "db/database.h"
 #include <stdexcept>
+#include <spdlog/spdlog.h>
 
 namespace fanqie {
 
@@ -164,24 +165,29 @@ bool Database::is_in_bookshelf(const std::string& book_id) {
 
 void Database::save_toc(const std::string& book_id,
                         const std::vector<TocItem>& toc) {
-    SQLite::Transaction tx(*db_);
-    db_->exec("DELETE FROM toc WHERE book_id='" + book_id + "'");
-    SQLite::Statement stmt(*db_,
-        "INSERT INTO toc(item_id,book_id,title,volume_name,word_count,update_time,sort_order)"
-        " VALUES(?,?,?,?,?,?,?)");
-    for (int i = 0; i < static_cast<int>(toc.size()); ++i) {
-        const auto& t = toc[i];
-        stmt.bind(1, t.item_id);
-        stmt.bind(2, book_id);
-        stmt.bind(3, t.title);
-        stmt.bind(4, t.volume_name);
-        stmt.bind(5, t.word_count);
-        stmt.bind(6, static_cast<int64_t>(t.update_time));
-        stmt.bind(7, i);
-        stmt.exec();
-        stmt.reset();
+    try {
+        SQLite::Transaction tx(*db_);
+        db_->exec("DELETE FROM toc WHERE book_id='" + book_id + "'");
+        SQLite::Statement stmt(*db_,
+            "INSERT INTO toc(item_id,book_id,title,volume_name,word_count,update_time,sort_order)"
+            " VALUES(?,?,?,?,?,?,?)");
+        for (int i = 0; i < static_cast<int>(toc.size()); ++i) {
+            const auto& t = toc[i];
+            stmt.bind(1, t.item_id);
+            stmt.bind(2, book_id);
+            stmt.bind(3, t.title);
+            stmt.bind(4, t.volume_name);
+            stmt.bind(5, t.word_count);
+            stmt.bind(6, static_cast<int64_t>(t.update_time));
+            stmt.bind(7, i);
+            stmt.exec();
+            stmt.reset();
+        }
+        tx.commit();
+    } catch (const std::exception& e) {
+        spdlog::error("save_toc() exception: book_id={} error={}", book_id, e.what());
+        throw;  // 重新抛出异常，让调用者处理
     }
-    tx.commit();
 }
 
 std::vector<TocItem> Database::get_toc(const std::string& book_id) {

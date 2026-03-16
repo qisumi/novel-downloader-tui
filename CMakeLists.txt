@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(fanqie-downloader-tui VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -45,6 +45,12 @@ set(RESOURCE_FILES resources.rc)
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
+# 静态 triplet 下优先静态链接 MSVC 运行时，便于单文件发布。
+if (MSVC AND DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "-static")
+    set_property(TARGET ${PROJECT_NAME} PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${LUABRIDGE3_INCLUDE_DIRS}
@@ -77,7 +83,24 @@ if (WIN32)
     )
     # 链接 ws2_32（httplib 需要）
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
+
+    # 动态链接场景下，构建后自动把第三方 DLL 复制到 exe 同目录，
+    # 便于直接打包整个 release 目录发布。
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+        COMMAND_EXPAND_LISTS
+    )
 endif()
 
 # ── 安装 ────────────────────────────────────────────────────────────────────
-install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION bin)
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION bin
+)
+
+if (WIN32)
+    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+        DESTINATION bin
+    )
+endif()

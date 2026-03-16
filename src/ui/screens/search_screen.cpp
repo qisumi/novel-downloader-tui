@@ -76,6 +76,8 @@ ftxui::Component make_search_screen(
                 state->selected >= static_cast<int>(state->results.size())) return;
             selected_book = state->results[state->selected];
         }
+        spdlog::info("search_screen: opening detail for book '{}' (id={})",
+                     selected_book.title, selected_book.book_id);
         ctx->current_book = selected_book;
         // 弹出详情对话框（模态）
         auto detail = make_book_detail_screen(ctx, screen);

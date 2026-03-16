@@ -93,6 +93,10 @@ ftxui::Component make_bookshelf_screen(
         if (ctx->bookshelf_dirty.exchange(false)) {
             refresh();
         }
+        // 切换到书架页时自动刷新
+        if (ctx->bookshelf_needs_refresh.exchange(false)) {
+            refresh();
+        }
 
         // ── 计算可视窗口 ───────────────────────────────────────
         int vis = bs_vis_count();

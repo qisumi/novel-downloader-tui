@@ -3,6 +3,8 @@
 基于 **番茄小说 API** 的终端界面（TUI）小说下载与 EPUB/TXT 导出工具，  
 使用 C++20 编写。
 
+支持通过命令行参数、系统环境变量或项目根目录下的 `.env` 文件配置 API Key、数据库路径和导出目录。
+
 ## 功能一览
 
 | 功能 | 说明 |
@@ -67,7 +69,7 @@ fanqie-downloader-tui/
 
 ### 前置条件
 
-- CMake ≥ 3.20
+- CMake ≥ 3.21
 - Visual Studio 2022 （或带 MSVC / clang-cl）
 - [VCPKG](https://github.com/microsoft/vcpkg) 并设置 `VCPKG_ROOT` 环境变量
 
@@ -75,17 +77,73 @@ fanqie-downloader-tui/
 # 1. 安装依赖（首次约需 10-20 分钟编译）
 vcpkg install
 
-# 2. 配置（x64-windows triplet）
-cmake -B build -S . `
-  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-  -DVCPKG_TARGET_TRIPLET=x64-windows `
-  -DCMAKE_BUILD_TYPE=Release
+# 2. 配置 Debug
+cmake --preset windows-x64-debug
 
 # 3. 编译
-cmake --build build --config Release
+cmake --build --preset windows-x64-debug
 
 # 4. 运行
-.\build\Release\fanqie-downloader-tui.exe
+.\build\debug\fanqie-downloader-tui.exe
+```
+
+### Release 构建
+
+```powershell
+# 动态依赖版（构建后自动复制依赖 DLL 到输出目录）
+cmake --preset windows-x64-release
+cmake --build --preset windows-x64-release
+
+# 静态链接版（优先用于单 exe 发布）
+cmake --preset windows-x64-release-static
+cmake --build --preset windows-x64-release-static
+```
+
+静态版产物位于 `build/release-static/`，更适合直接分发。  
+动态版产物位于 `build/release/`，构建后会自动把依赖 DLL 复制到 exe 同目录，发布时打包整个目录即可。
+
+> `x64-windows-static` 首次构建通常较慢，因为 vcpkg 需要额外安装一套静态库。
+
+## 配置
+
+### 配置优先级
+
+程序按以下顺序读取配置，越靠前优先级越高：
+
+1. 命令行参数
+2. 系统环境变量
+3. 项目根目录下的 `.env` 文件
+
+### 使用 `.env.example`
+
+仓库提供了示例文件 [.env.example](/c:/Users/qisum/repos/fanqie-downloader-tui/.env.example)。首次使用可以直接复制一份：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+然后编辑 `.env`：
+
+```dotenv
+FANQIE_APIKEY=your_api_key
+FANQIE_DB=fanqie.db
+FANQIE_EPUB_DIR=.
+```
+
+说明：
+
+- `FANQIE_APIKEY`：番茄小说 API Key，建议自行填写有效值
+- `FANQIE_DB`：SQLite 数据库文件路径
+- `FANQIE_EPUB_DIR`：EPUB/TXT 导出目录
+
+如果同时设置了 `.env`、系统环境变量和命令行参数，最终以命令行参数为准。
+
+### 命令行示例
+
+```powershell
+.\build\release\fanqie-downloader-tui.exe -k <key>
+.\build\release\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books
+.\build\release-static\fanqie-downloader-tui.exe -k <key> --db .\fanqie.db -o .\books
 ```
 
 ## 操作方式
@@ -142,7 +200,7 @@ cmake --build build --config Release
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `FANQIE_APIKEY` | API 密钥 | 内置默认 Key |
+| `FANQIE_APIKEY` | API 密钥 | 空 |
 | `FANQIE_DB` | SQLite 数据库路径 | `fanqie.db` |
 | `FANQIE_EPUB_DIR` | EPUB/TXT 输出目录 | 当前目录 |
 

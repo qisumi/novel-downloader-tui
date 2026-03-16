@@ -30,6 +30,21 @@
         "CMAKE_CXX_COMPILER": "clang-cl",
         "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
       }
+    },
+    {
+      "name": "windows-x64-release-static",
+      "displayName": "Windows x64 Release Static (LLVM clang-cl)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release-static",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_MAKE_PROGRAM": "C:/Users/qisum/AppData/Local/Microsoft/WinGet/Packages/Ninja-build.Ninja_Microsoft.Winget.Source_8wekyb3d8bbwe/ninja.exe"
+      }
     }
   ],
   "buildPresets": [
@@ -40,6 +55,10 @@
     {
       "name": "windows-x64-release",
       "configurePreset": "windows-x64-release"
+    },
+    {
+      "name": "windows-x64-release-static",
+      "configurePreset": "windows-x64-release-static"
     }
   ]
 }

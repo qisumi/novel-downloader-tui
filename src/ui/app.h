@@ -22,6 +22,8 @@ struct AppContext {
 
     // 书架脏标志：搜索页加书后置 true，书架页刷新后清零
     std::atomic<bool> bookshelf_dirty{false};
+    // 书架页需要刷新标志：切换到书架页时置 true，书架页刷新后清零
+    std::atomic<bool> bookshelf_needs_refresh{false};
     // 全局退出请求：子页面可置 true，请求主循环退出
     std::atomic<bool> app_exit_requested{false};
 };
