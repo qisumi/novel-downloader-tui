@@ -14,18 +14,55 @@ vcpkg list
 
 ## 配置（CMake Configure）
 
+### 组合规则
+
+```text
+Clang / GCC  -> 仅支持 TUI
+MSVC         -> 支持 TUI 或 GUI
+GUI          -> 当前为 WinUI 3 预留占位入口，需使用 VS 工具链
+```
+
 ```powershell
-# Debug 配置（输出目录：build/debug/）
+# Debug 配置（Clang TUI，输出目录：build/debug/）
 cmake --preset windows-x64-debug
 
-# Release 配置（动态依赖，输出目录：build/release/）
+# Release 配置（Clang TUI，动态依赖，输出目录：build/release/）
 cmake --preset windows-x64-release
 
-# Release 配置（静态链接，优先用于单 exe 发布，输出目录：build/release-static/）
+# Release 配置（Clang TUI，静态链接，优先用于单 exe 发布，输出目录：build/release-static/）
 cmake --preset windows-x64-release-static
 
-# Release 配置（静态链接，MSVC 版，主要供 GitHub Actions 发布，输出目录：build/release-static-msvc/）
+# Debug 配置（MSVC TUI，输出目录：build/debug-msvc-tui/）
+cmake --preset windows-x64-debug-msvc-tui
+
+# Release 配置（MSVC TUI，输出目录：build/release-msvc-tui/）
+cmake --preset windows-x64-release-msvc-tui
+
+# Debug 配置（MSVC GUI 占位入口，输出目录：build/debug-msvc-gui/）
+cmake --preset windows-x64-debug-msvc-gui
+
+# Release 配置（MSVC GUI 占位入口，输出目录：build/release-msvc-gui/）
+cmake --preset windows-x64-release-msvc-gui
+
+# Release 配置（MSVC TUI，静态链接，输出目录：build/release-static-msvc/）
 cmake --preset windows-x64-release-static-msvc
+```
+
+### 手动指定前端
+
+```powershell
+# Clang TUI（手动配置）
+cmake -S . -B build\custom-clang-tui -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake `
+  -DCMAKE_C_COMPILER=clang-cl `
+  -DCMAKE_CXX_COMPILER=clang-cl `
+  -DNOVEL_FRONTEND=TUI
+
+# MSVC GUI（手动配置）
+cmake -S . -B build\custom-msvc-gui `
+  -G "Visual Studio 18 2026" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake `
+  -DNOVEL_FRONTEND=GUI
 ```
 
 ---
@@ -36,13 +73,25 @@ cmake --preset windows-x64-release-static-msvc
 # Debug 构建
 cmake --build --preset windows-x64-debug
 
-# Release 构建（动态依赖）
+# Release 构建（Clang TUI，动态依赖）
 cmake --build --preset windows-x64-release
 
-# Release 构建（静态链接，单 exe 优先）
+# Release 构建（Clang TUI，静态链接，单 exe 优先）
 cmake --build --preset windows-x64-release-static
 
-# Release 构建（静态链接，MSVC 版）
+# Debug 构建（MSVC TUI）
+cmake --build --preset windows-x64-debug-msvc-tui
+
+# Release 构建（MSVC TUI）
+cmake --build --preset windows-x64-release-msvc-tui
+
+# Debug 构建（MSVC GUI）
+cmake --build --preset windows-x64-debug-msvc-gui
+
+# Release 构建（MSVC GUI）
+cmake --build --preset windows-x64-release-msvc-gui
+
+# Release 构建（MSVC TUI，静态链接）
 cmake --build --preset windows-x64-release-static-msvc
 
 # 仅重新编译更改的文件（增量构建，同上命令）
@@ -51,6 +100,10 @@ cmake --build --preset windows-x64-release-static-msvc
 cmake --build --preset windows-x64-debug --clean-first
 cmake --build --preset windows-x64-release --clean-first
 cmake --build --preset windows-x64-release-static --clean-first
+cmake --build --preset windows-x64-debug-msvc-tui --clean-first
+cmake --build --preset windows-x64-release-msvc-tui --clean-first
+cmake --build --preset windows-x64-debug-msvc-gui --clean-first
+cmake --build --preset windows-x64-release-msvc-gui --clean-first
 cmake --build --preset windows-x64-release-static-msvc --clean-first
 ```
 
@@ -62,13 +115,22 @@ cmake --build --preset windows-x64-release-static-msvc --clean-first
 # Debug
 .\build\debug\novel-downloader-tui.exe
 
-# Release（动态依赖）
+# Release（Clang TUI，动态依赖）
 .\build\release\novel-downloader-tui.exe
 
-# Release（静态链接）
+# Release（Clang TUI，静态链接）
 .\build\release-static\novel-downloader-tui.exe
 
-# Release（静态链接，MSVC 版）
+# Debug（MSVC TUI）
+.\build\debug-msvc-tui\novel-downloader-tui.exe
+
+# Release（MSVC TUI）
+.\build\release-msvc-tui\novel-downloader-tui.exe
+
+# Release（MSVC GUI）
+.\build\release-msvc-gui\novel-downloader-tui.exe
+
+# Release（静态链接，MSVC TUI）
 .\build\release-static-msvc\novel-downloader-tui.exe
 
 # 查看帮助
@@ -175,13 +237,29 @@ cmake --build --preset windows-x64-release --target clean
 # 清理 Release 构建产物（静态链接）
 cmake --build --preset windows-x64-release-static --target clean
 
-# 清理 Release 构建产物（静态链接，MSVC 版）
+# 清理 Debug 构建产物（MSVC TUI）
+cmake --build --preset windows-x64-debug-msvc-tui --target clean
+
+# 清理 Release 构建产物（MSVC TUI）
+cmake --build --preset windows-x64-release-msvc-tui --target clean
+
+# 清理 Debug 构建产物（MSVC GUI）
+cmake --build --preset windows-x64-debug-msvc-gui --target clean
+
+# 清理 Release 构建产物（MSVC GUI）
+cmake --build --preset windows-x64-release-msvc-gui --target clean
+
+# 清理 Release 构建产物（静态链接，MSVC TUI）
 cmake --build --preset windows-x64-release-static-msvc --target clean
 
 # 删除全部构建目录（彻底重置）
 Remove-Item -Recurse -Force .\build\debug
 Remove-Item -Recurse -Force .\build\release
 Remove-Item -Recurse -Force .\build\release-static
+Remove-Item -Recurse -Force .\build\debug-msvc-tui
+Remove-Item -Recurse -Force .\build\release-msvc-tui
+Remove-Item -Recurse -Force .\build\debug-msvc-gui
+Remove-Item -Recurse -Force .\build\release-msvc-gui
 Remove-Item -Recurse -Force .\build\release-static-msvc
 ```
 
@@ -202,7 +280,7 @@ cmake --build --preset windows-x64-release-static
 ```text
 GitHub Actions：
 - 推送形如 v1.2.3 的 tag 后，会自动构建 windows-static 包并发布 GitHub Release
-- CI 发布默认使用 windows-x64-release-static-msvc 预设，避免 clang-cl 在 Runner 上的链接兼容问题
+- CI 发布默认使用 windows-x64-release-static-msvc 预设，走 MSVC TUI 工具链
 - 工作流文件：.github/workflows/release-windows-static.yml
 ```
 
@@ -237,7 +315,7 @@ cmake --preset windows-x64-debug
 # 1. 安装依赖
 vcpkg install
 
-# 2. 配置 + 构建（Debug）
+# 2. 配置 + 构建（Clang TUI Debug）
 cmake --preset windows-x64-debug
 cmake --build --preset windows-x64-debug
 

@@ -5,6 +5,12 @@
 
 当前终端界面实现位于 `src/tui/`，并预留 `src/gui/` 作为后续 Windows 平台 WinUI 3 图形界面迁移入口。
 
+当前 CMake 约束如下：
+
+- `Clang` / `GNU` 工具链仅支持 `TUI`
+- `MSVC` 工具链支持 `TUI` 或 `GUI`
+- `GUI` 目前是可编译的占位入口，后续可直接替换为 WinUI 3 工程
+
 支持通过命令行参数、系统环境变量或项目根目录下的 `.env` 文件配置 API Key、数据库路径、导出目录和书源插件目录。
 
 ## 功能一览
@@ -90,7 +96,7 @@ novel-downloader-tui/
 # 1. 安装依赖（首次约需 10-20 分钟编译）
 vcpkg install
 
-# 2. 配置 Debug
+# 2. 配置 Debug（Clang TUI）
 cmake --preset windows-x64-debug
 
 # 3. 编译
@@ -103,19 +109,46 @@ cmake --build --preset windows-x64-debug
 ### Release 构建
 
 ```powershell
-# 动态依赖版（构建后自动复制依赖 DLL 到输出目录）
+# 动态依赖版（Clang TUI，构建后自动复制依赖 DLL 到输出目录）
 cmake --preset windows-x64-release
 cmake --build --preset windows-x64-release
 
-# 静态链接版（优先用于单 exe 发布）
+# 静态链接版（Clang TUI，优先用于单 exe 发布）
 cmake --preset windows-x64-release-static
 cmake --build --preset windows-x64-release-static
+
+# MSVC TUI
+cmake --preset windows-x64-release-msvc-tui
+cmake --build --preset windows-x64-release-msvc-tui
+
+# MSVC GUI（当前为 WinUI 3 预留占位入口）
+cmake --preset windows-x64-release-msvc-gui
+cmake --build --preset windows-x64-release-msvc-gui
 ```
 
 静态版产物位于 `build/release-static/`，更适合直接分发。  
 动态版产物位于 `build/release/`，构建后会自动把依赖 DLL 复制到 exe 同目录，发布时打包整个目录即可。
 
 > `x64-windows-static` 首次构建通常较慢，因为 vcpkg 需要额外安装一套静态库。
+
+### 手动切换前端
+
+除了 preset 之外，也可以直接在 configure 时切换：
+
+```powershell
+cmake -S . -B build/custom-clang-tui -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
+  -DCMAKE_C_COMPILER=clang-cl `
+  -DCMAKE_CXX_COMPILER=clang-cl `
+  -DNOVEL_FRONTEND=TUI
+
+cmake -S . -B build/custom-msvc-gui `
+  -G "Visual Studio 18 2026" -A x64 `
+  -DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake `
+  -DNOVEL_FRONTEND=GUI
+```
+
+如果使用 `g++` / `gcc`，同样只允许 `-DNOVEL_FRONTEND=TUI`。
 
 ## 配置
 
