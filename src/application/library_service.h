@@ -8,7 +8,7 @@
 #include "db/database.h"
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 class SourceManager;
 
@@ -38,4 +38,4 @@ private:
     std::shared_ptr<Database>      db_;
 };
 
-} // namespace fanqie
+} // namespace novel

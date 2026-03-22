@@ -13,12 +13,12 @@
 #include "source/host/http_service.h"
 #include "source/host/json_bridge.h"
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
 HostApi* get_host_api(lua_State* L) {
-    lua_getfield(L, LUA_REGISTRYINDEX, "__fanqie_host_api");
+    lua_getfield(L, LUA_REGISTRYINDEX, "__novel_host_api");
     auto* ptr = static_cast<HostApi*>(lua_touserdata(L, -1));
     lua_pop(L, 1);
     return ptr;
@@ -276,7 +276,7 @@ HostApi::HostApi(std::shared_ptr<HttpService> http_service)
 
 void HostApi::register_with(lua_State* L) {
     lua_pushlightuserdata(L, this);
-    lua_setfield(L, LUA_REGISTRYINDEX, "__fanqie_host_api");
+    lua_setfield(L, LUA_REGISTRYINDEX, "__novel_host_api");
 
     luabridge::getGlobalNamespace(L)
         .beginNamespace("host")
@@ -293,4 +293,4 @@ void HostApi::register_with(lua_State* L) {
         .endNamespace();
 }
 
-} // namespace fanqie
+} // namespace novel

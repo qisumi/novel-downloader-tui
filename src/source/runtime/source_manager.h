@@ -7,7 +7,7 @@
 
 #include "source/domain/book_source.h"
 
-namespace fanqie {
+namespace novel {
 
 class HostApi;
 
@@ -28,4 +28,4 @@ private:
     std::shared_ptr<IBookSource>              current_source_;
 };
 
-} // namespace fanqie
+} // namespace novel

@@ -8,7 +8,7 @@
 #include <string>
 #include <unordered_set>
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -163,4 +163,4 @@ std::string lua_to_json_string(lua_State* L, int index) {
     return lua_value_to_json(L, index, visited).dump();
 }
 
-} // namespace fanqie
+} // namespace novel

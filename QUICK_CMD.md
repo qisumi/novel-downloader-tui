@@ -60,53 +60,53 @@ cmake --build --preset windows-x64-release-static-msvc --clean-first
 
 ```powershell
 # Debug
-.\build\debug\fanqie-downloader-tui.exe
+.\build\debug\novel-downloader-tui.exe
 
 # Release（动态依赖）
-.\build\release\fanqie-downloader-tui.exe
+.\build\release\novel-downloader-tui.exe
 
 # Release（静态链接）
-.\build\release-static\fanqie-downloader-tui.exe
+.\build\release-static\novel-downloader-tui.exe
 
 # Release（静态链接，MSVC 版）
-.\build\release-static-msvc\fanqie-downloader-tui.exe
+.\build\release-static-msvc\novel-downloader-tui.exe
 
 # 查看帮助
-.\build\debug\fanqie-downloader-tui.exe --help
+.\build\debug\novel-downloader-tui.exe --help
 ```
 
 ### 命令行参数
 
 ```powershell
 # 指定 API Key
-.\build\release\fanqie-downloader-tui.exe -k <your_api_key>
+.\build\release\novel-downloader-tui.exe -k <your_api_key>
 
 # 指定数据库路径
-.\build\release\fanqie-downloader-tui.exe --db C:\data\fanqie.db
+.\build\release\novel-downloader-tui.exe --db C:\data\novel.db
 
 # 指定 EPUB/TXT 输出目录
-.\build\release\fanqie-downloader-tui.exe -o C:\books
+.\build\release\novel-downloader-tui.exe -o C:\books
 
 # 列出当前可用书源
-.\build\release\fanqie-downloader-tui.exe --list-sources
+.\build\release\novel-downloader-tui.exe --list-sources
 
 # 指定插件目录和书源
-.\build\release\fanqie-downloader-tui.exe --plugin-dir .\plugins --source fanqie
+.\build\release\novel-downloader-tui.exe --plugin-dir .\plugins --source fanqie
 
 # 组合使用
-.\build\release\fanqie-downloader-tui.exe -k <key> --db .\data.db -o .\epub_out --source fanqie
+.\build\release\novel-downloader-tui.exe -k <key> --db .\data.db -o .\epub_out --source fanqie
 ```
 
 ### 环境变量（替代命令行参数）
 
 ```powershell
-$env:FANQIE_APIKEY   = "your_api_key"      # API 密钥
-$env:FANQIE_DB       = "C:\data\fanqie.db" # SQLite 数据库路径
-$env:FANQIE_EPUB_DIR = "C:\books"          # EPUB/TXT 输出目录
-$env:FANQIE_PLUGIN_DIR = ".\plugins"       # Lua 插件目录
-$env:FANQIE_SOURCE     = "fanqie"          # 默认书源 ID
+# $env:FANQIE_APIKEY = "your_api_key"      # 书源插件专属变量
+$env:NOVEL_DB       = "C:\data\novel.db" # SQLite 数据库路径
+$env:NOVEL_EPUB_DIR = "C:\books"          # EPUB/TXT 输出目录
+$env:NOVEL_PLUGIN_DIR = ".\plugins"       # Lua 插件目录
+$env:NOVEL_SOURCE     = "fanqie"          # 默认书源 ID
 
-.\build\release\fanqie-downloader-tui.exe
+.\build\release\novel-downloader-tui.exe
 ```
 
 ---
@@ -195,7 +195,7 @@ cmake --preset windows-x64-release-static
 cmake --build --preset windows-x64-release-static
 
 # 产物：
-#   .\build\release-static\fanqie-downloader-tui.exe
+#   .\build\release-static\novel-downloader-tui.exe
 #   .\build\release-static\plugins\
 ```
 
@@ -242,5 +242,5 @@ cmake --preset windows-x64-debug
 cmake --build --preset windows-x64-debug
 
 # 3. 运行
-.\build\debug\fanqie-downloader-tui.exe
+.\build\debug\novel-downloader-tui.exe
 ```

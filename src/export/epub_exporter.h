@@ -4,7 +4,7 @@
 #include <functional>
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 struct EpubOptions {
     bool include_toc_page = true;    ///< 是否生成 NCX/导航页
@@ -37,4 +37,4 @@ private:
     static std::string make_stylesheet();
 };
 
-} // namespace fanqie
+} // namespace novel

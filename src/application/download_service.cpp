@@ -7,7 +7,7 @@
 #include "application/library_service.h"
 #include "source/runtime/source_manager.h"
 
-namespace fanqie {
+namespace novel {
 
 DownloadService::DownloadService(
     std::shared_ptr<SourceManager> source_manager,
@@ -82,4 +82,4 @@ std::vector<Chapter> DownloadService::collect_chapters(
     return chapters;
 }
 
-} // namespace fanqie
+} // namespace novel

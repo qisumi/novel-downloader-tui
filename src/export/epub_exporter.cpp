@@ -15,7 +15,7 @@
 namespace fs = std::filesystem;
 using namespace tinyxml2;
 
-namespace fanqie {
+namespace novel {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 辅助
@@ -173,7 +173,7 @@ std::string EpubExporter::make_opf(const Book& book,
          unique-identifier="book-id" xml:lang="zh-CN">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"
             xmlns:opf="http://www.idpf.org/2007/opf">
-    <dc:identifier id="book-id">fanqie-)" << xml_escape(book.book_id) << R"(</dc:identifier>
+    <dc:identifier id="book-id">novel-)" << xml_escape(book.book_id) << R"(</dc:identifier>
     <dc:title>)" << xml_escape(clean_title) << R"(</dc:title>
     <dc:creator>)" << xml_escape(clean_author) << R"(</dc:creator>
     <dc:language>zh-CN</dc:language>
@@ -215,7 +215,7 @@ std::string EpubExporter::make_ncx(const Book& book,
    "http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <head>
-    <meta name="dtb:uid" content="fanqie-)" << xml_escape(book.book_id) << R"("/>
+    <meta name="dtb:uid" content="novel-)" << xml_escape(book.book_id) << R"("/>
     <meta name="dtb:depth" content="1"/>
     <meta name="dtb:totalPageCount" content="0"/>
     <meta name="dtb:maxPageNumber" content="0"/>
@@ -406,4 +406,4 @@ std::string EpubExporter::export_book(const Book& book,
     return fs::absolute(out_path).string();
 }
 
-} // namespace fanqie
+} // namespace novel

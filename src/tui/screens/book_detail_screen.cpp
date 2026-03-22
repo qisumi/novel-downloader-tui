@@ -1,4 +1,4 @@
-#include "ui/screens/book_detail_screen.h"
+#include "tui/screens/book_detail_screen.h"
 #include "export/epub_exporter.h"
 #include "export/txt_exporter.h"
 #include "source/domain/source_errors.h"
@@ -15,7 +15,7 @@
 
 using namespace ftxui;
 
-namespace fanqie {
+namespace novel {
 
 ftxui::Component make_book_detail_screen(
     std::shared_ptr<AppContext> ctx,
@@ -763,4 +763,4 @@ ftxui::Component make_book_detail_screen(
     return handler;
 }
 
-} // namespace fanqie
+} // namespace novel

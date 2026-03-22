@@ -10,7 +10,7 @@
 #include "source/lua/lua_book_source.h"
 #include "source/lua/lua_runtime.h"
 
-namespace fanqie {
+namespace novel {
 
 SourceManager::SourceManager(std::shared_ptr<HostApi> host_api)
     : host_api_(std::move(host_api)) {}
@@ -117,4 +117,4 @@ void SourceManager::configure_current() {
     current_source()->configure();
 }
 
-} // namespace fanqie
+} // namespace novel

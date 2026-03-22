@@ -6,7 +6,7 @@
 #include "source/lua/lua_runtime.h"
 #include "source/lua/lua_source_schema.h"
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -239,4 +239,4 @@ std::optional<Chapter> LuaBookSource::get_chapter(
     });
 }
 
-} // namespace fanqie
+} // namespace novel

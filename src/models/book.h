@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-namespace fanqie {
+namespace novel {
 
 /// 书籍基本信息（搜索结果 / 书架条目）
 struct Book {
@@ -36,4 +36,4 @@ struct Chapter {
     std::string content;   // 已解密的纯文本正文
 };
 
-} // namespace fanqie
+} // namespace novel

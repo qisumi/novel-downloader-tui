@@ -7,7 +7,7 @@
 #include "models/book.h"
 #include "source/domain/source_types.h"
 
-namespace fanqie {
+namespace novel {
 
 class IBookSource {
 public:
@@ -26,4 +26,4 @@ public:
         const std::string& item_id) = 0;
 };
 
-} // namespace fanqie
+} // namespace novel

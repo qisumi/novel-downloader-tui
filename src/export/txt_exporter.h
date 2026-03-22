@@ -4,7 +4,7 @@
 #include <functional>
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 struct TxtOptions {
     std::string output_dir = ".";    ///< 输出目录
@@ -22,4 +22,4 @@ public:
         std::function<void(int, int)> progress_cb = nullptr);
 };
 
-} // namespace fanqie
+} // namespace novel

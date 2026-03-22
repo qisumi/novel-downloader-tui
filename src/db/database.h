@@ -9,11 +9,11 @@
 
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 class Database {
 public:
-    explicit Database(const std::string& db_path = "fanqie.db");
+    explicit Database(const std::string& db_path = "novel.db");
 
     void save_book(const std::string& source_id, const Book& book);
     bool remove_book(const std::string& source_id, const std::string& book_id);
@@ -42,4 +42,4 @@ private:
     void init_schema();
 };
 
-} // namespace fanqie
+} // namespace novel

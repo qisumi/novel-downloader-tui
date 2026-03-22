@@ -7,7 +7,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -152,4 +152,4 @@ std::string url_encode(const std::string& value) {
     return encoded.str();
 }
 
-} // namespace fanqie
+} // namespace novel

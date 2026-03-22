@@ -4,15 +4,17 @@
 
 ## 项目概述
 
-**番茄小说 TUI 下载器** —— 一个基于终端界面（TUI）的小说下载与导出工具，使用 C++20 编写。通过番茄小说 API 搜索、缓存小说内容，支持导出为 EPUB/TXT 格式。
+**小说下载 TUI 工具** —— 一个基于终端界面（TUI）的小说下载与导出工具，使用 C++20 编写。项目通过 **Lua 插件书源** 搜索、缓存小说内容，当前内置番茄小说与七猫小说书源，支持导出为 EPUB/TXT 格式。
 
 ### 核心功能
 
 - 搜索书籍（关键词搜索书名/作者）
+- 多书源支持（当前内置 `fanqie` / `qimao`，可通过 Lua 插件扩展）
 - 书架管理（本地收藏）
 - 目录浏览（章节列表、缓存状态）
 - 批量下载（SQLite 缓存）
 - 导出 EPUB/TXT（支持章节范围选择）
+- 书源清单与切换（CLI `--source` / `--list-sources`）
 
 ## 技术栈
 
@@ -33,12 +35,19 @@
 ## 目录结构
 
 ```
-fanqie-downloader-tui/
+novel-downloader-tui/
 ├── CMakeLists.txt              # CMake 构建配置
 ├── CMakePresets.json           # CMake 预设（Debug/Release）
 ├── vcpkg.json                  # VCPKG 依赖清单
 ├── README.md                   # 用户文档
 ├── QUICK_CMD.md                # 开发命令速查
+├── .env.example                # 环境变量示例
+├── plugins/
+│   ├── README.md               # Lua 插件开发说明
+│   ├── fanqie.lua              # 小说默认书源
+│   ├── qimao.lua               # 七猫小说书源
+│   └── _shared/
+│       └── common.lua          # 插件共享 helper
 ├── reference/
 │   └── fanqie.json             # API 参考 JSON
 └── src/
@@ -83,13 +92,13 @@ fanqie-downloader-tui/
 
 - **C++20** 标准
 - 使用 `#pragma once` 作为头文件保护
-- 命名空间统一为 `fanqie::`
+- 命名空间统一为 `novel::`
 
 ### 命名约定
 
 | 类型 | 风格 | 示例 |
 |------|------|------|
-| 命名空间 | 小写下划线 | `fanqie::` |
+| 命名空间 | 小写下划线 | `novel::` |
 | 类/结构体 | PascalCase | `SourceManager`, `Book` |
 | 函数/方法 | snake_case | `get_book_info()`, `save_book()` |
 | 变量 | snake_case | `book_id`, `toc_items` |
@@ -114,7 +123,7 @@ fanqie-downloader-tui/
 #include "项目头文件"
 
 // 2. 命名空间
-namespace fanqie {
+namespace novel {
 
 // 3. 类定义
 class Example {
@@ -124,7 +133,7 @@ private:
     // 私有成员
 };
 
-} // namespace fanqie
+} // namespace novel
 ```
 
 ## 核心模块详解
@@ -173,12 +182,53 @@ struct Chapter {
 class SourceManager {
 public:
     void load_from_directory(const std::string& plugin_dir);
+    std::vector<SourceInfo> list_sources() const;
     bool select_source(const std::string& source_id);
     std::shared_ptr<IBookSource> current_source() const;
     std::optional<SourceInfo> current_info() const;
     void configure_current();
 };
 ```
+
+### 插件清单与宿主 API
+
+Lua 插件位于 `plugins/`，需要返回一个 table，并至少实现：
+
+```lua
+return {
+    manifest = {
+        id = "fanqie",
+        name = "小说",
+        version = "1.1.0",
+        required_envs = { "FANQIE_APIKEY" },
+        optional_envs = {},
+    },
+    configure = function() end,         -- 可选，但推荐
+    search = function(keywords, page) end,
+    get_book_info = function(book_id) end, -- 可选
+    get_toc = function(book_id) end,
+    get_chapter = function(book_id, item_id) end,
+}
+```
+
+宿主当前为 Lua 暴露的常用 API：
+
+- `host.http_get(url)`
+- `host.http_request({ method, url, headers?, body?, timeout_seconds? })`
+- `host.json_parse(text)`
+- `host.json_stringify(value)`
+- `host.url_encode(text)`
+- `host.env_get(name[, default])`
+- `host.config_error(message)`
+- `host.log_info(msg)` / `host.log_warn(msg)` / `host.log_error(msg)`
+
+约定：
+
+- 插件通过 `manifest.required_envs` / `manifest.optional_envs` 声明配置需求
+- `.env` 由宿主统一加载，插件通过 `host.env_get(...)` 或共享 helper 读取
+- 配置缺失或非法时，优先在插件侧调用 `host.config_error("...")`
+- 可复用逻辑优先抽到 `plugins/_shared/*.lua`
+- 更完整的插件约定以 `plugins/README.md` 为准
 
 ### 数据库层 (`src/db/database.h`)
 
@@ -247,17 +297,21 @@ cmake --build --preset windows-x64-release
 
 ```powershell
 # 直接运行（插件会自行从环境变量或 .env 读取所需配置）
-.\build\release\fanqie-downloader-tui.exe
+.\build\release\novel-downloader-tui.exe
 
 # 命令行参数
-.\build\release\fanqie-downloader-tui.exe --db <db_path> -o <epub_dir> --plugin-dir plugins --source fanqie
+.\build\release\novel-downloader-tui.exe --db <db_path> -o <epub_dir> --plugin-dir plugins --source fanqie
+
+# 列出当前可用书源
+.\build\release\novel-downloader-tui.exe --plugin-dir plugins --list-sources
 
 # 环境变量
 $env:FANQIE_APIKEY = "your_key"
-$env:FANQIE_DB = "fanqie.db"
-$env:FANQIE_EPUB_DIR = "."
-$env:FANQIE_PLUGIN_DIR = "plugins"
-$env:FANQIE_SOURCE = "fanqie"
+$env:QIMAO_APIKEY = "your_key"
+$env:NOVEL_DB = "novel.db"
+$env:NOVEL_EPUB_DIR = "."
+$env:NOVEL_PLUGIN_DIR = "plugins"
+$env:NOVEL_SOURCE = "fanqie"
 ```
 
 ### 配置优先级
@@ -391,10 +445,13 @@ CREATE TABLE chapters (
 
 ### 添加新的书源能力
 
-1. 在 `plugins/` 新建或修改 Lua 插件
-2. 通过 `host.http_get()` / `host.json_parse()` 调用宿主能力
-3. 返回符合 `Book` / `TocItem` / `Chapter` 结构的数据
-4. 用 `--source` 或 `SourceManager::select_source()` 切换书源
+1. 在 `plugins/` 新建或修改 Lua 插件，并补齐 `manifest.id/name/version`
+2. 按需声明 `required_envs` / `optional_envs`
+3. 通过 `host.http_get()` / `host.http_request()` / `host.json_parse()` 等宿主能力发起请求
+4. 返回符合 `Book` / `TocItem` / `Chapter` 结构的数据
+5. 配置缺失、请求参数错误、数据解析错误优先在插件侧给出明确错误
+6. 通用逻辑优先复用 `plugins/_shared/common.lua`
+7. 用 `--source`、`--list-sources` 或 `SourceManager::select_source()` 验证书源加载结果
 
 ### 添加新的 UI 屏幕
 
@@ -419,16 +476,19 @@ CREATE TABLE chapters (
 - 网络请求使用 `std::optional` 表示可能失败的操作
 - 使用 `spdlog` 记录日志：`spdlog::info()`, `spdlog::error()`, `spdlog::warn()`
 - 用户界面显示友好的错误提示
+- 书源错误统一使用 `SourceError` / `SourceException` 传递上下文
+- 插件错误优先区分为：配置错误、请求参数错误、数据处理错误、网络错误
+- C++ 侧会补充 `source_id`、`operation`、`plugin_path`，日志中优先保留这些字段
 
 ## 日志
 
-日志文件：`fanqie.log`
+日志文件：`novel.log`
 
 ```cpp
 #include "logger.h"
 
 // 初始化（main.cpp 中已调用）
-fanqie::init_logger("fanqie.log");
+novel::init_logger("novel.log");
 
 // 使用
 spdlog::info("消息");
@@ -440,8 +500,9 @@ spdlog::error("错误: {}", error_msg);
 1. **Windows 平台优先**：项目主要针对 Windows 开发，使用 Clang 编译
 2. **UTF-8 编码**：main.cpp 中设置了 UTF-8 控制台输出
 3. **同步书源调用**：Lua 书源中的网络请求仍是同步执行，UI 中需在后台线程调用
-4. **API Key 必需**：运行时必须提供有效的番茄小说 API Key
+4. **插件配置按书源决定**：例如内置 `fanqie` 需要 `FANQIE_APIKEY`，`qimao` 需要 `QIMAO_APIKEY`，以插件 `manifest.required_envs` 为准
 5. **线程安全**：`AppContext::bookshelf_dirty` 使用 `std::atomic` 保证线程安全
+6. **发布包需携带插件目录**：运行时依赖 `plugins/` 下的 Lua 脚本，发布或打包时不要遗漏
 
 ## 相关文档
 

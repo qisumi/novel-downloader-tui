@@ -2,7 +2,7 @@
 
 #include "source/runtime/source_manager.h"
 
-namespace fanqie {
+namespace novel {
 
 LibraryService::LibraryService(
     std::shared_ptr<SourceManager> source_manager,
@@ -68,4 +68,4 @@ std::string LibraryService::current_source_name() const {
     return source_manager_->current_info()->name;
 }
 
-} // namespace fanqie
+} // namespace novel

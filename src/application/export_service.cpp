@@ -8,7 +8,7 @@
 #include "export/epub_exporter.h"
 #include "export/txt_exporter.h"
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -63,4 +63,4 @@ std::string ExportService::export_book(
     return TxtExporter::export_book(book, chapters, opts, std::move(export_progress_cb));
 }
 
-} // namespace fanqie
+} // namespace novel

@@ -1,7 +1,7 @@
-#include "ui/app.h"
-#include "ui/screens/search_screen.h"
-#include "ui/screens/bookshelf_screen.h"
-#include "ui/screens/book_detail_screen.h"
+#include "tui/app.h"
+#include "tui/screens/search_screen.h"
+#include "tui/screens/bookshelf_screen.h"
+#include "tui/screens/book_detail_screen.h"
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
@@ -9,7 +9,7 @@
 
 using namespace ftxui;
 
-namespace fanqie {
+namespace novel {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 顶部标签栏（书架 / 搜索）
@@ -59,7 +59,7 @@ int run_app(std::shared_ptr<AppContext> ctx) {
         return vbox({
             // ── 顶部标题栏 ────────────────────────────────────
             hbox({
-                text(" 🍅 番茄小说 TUI ") | bold | color(Color::Red),
+                text(" 🍅 小说下载 TUI ") | bold | color(Color::Red),
                 text("[" + ctx->current_source_name + "]") | color(Color::Yellow),
                 text("  "),
                 back_btn->Render(),
@@ -134,4 +134,4 @@ int run_app(std::shared_ptr<AppContext> ctx) {
     return 0;
 }
 
-} // namespace fanqie
+} // namespace novel

@@ -6,7 +6,7 @@
 
 namespace fs = std::filesystem;
 
-namespace fanqie {
+namespace novel {
 
 static std::u8string to_u8string(const std::string& s) {
     return std::u8string(reinterpret_cast<const char8_t*>(s.data()),
@@ -50,4 +50,4 @@ std::string TxtExporter::export_book(const Book& book,
     return std::string(abs_u8.begin(), abs_u8.end());
 }
 
-} // namespace fanqie
+} // namespace novel

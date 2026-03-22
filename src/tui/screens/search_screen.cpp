@@ -1,5 +1,5 @@
-#include "ui/screens/search_screen.h"
-#include "ui/screens/book_detail_screen.h"
+#include "tui/screens/search_screen.h"
+#include "tui/screens/book_detail_screen.h"
 #include "source/domain/source_errors.h"
 
 #include <ftxui/component/component.hpp>
@@ -11,7 +11,7 @@
 
 using namespace ftxui;
 
-namespace fanqie {
+namespace novel {
 
 ftxui::Component make_search_screen(
     std::shared_ptr<AppContext> ctx,
@@ -285,4 +285,4 @@ ftxui::Component make_search_screen(
     return handler;
 }
 
-} // namespace fanqie
+} // namespace novel

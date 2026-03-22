@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace fanqie {
+namespace novel {
 
 struct SourceInfo {
     std::string id;
@@ -22,4 +22,4 @@ struct SourceCapabilities {
     bool supports_chapter = true;
 };
 
-} // namespace fanqie
+} // namespace novel

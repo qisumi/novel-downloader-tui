@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(fanqie-downloader-tui VERSION 0.2.0 LANGUAGES CXX)
+project(novel-downloader-tui VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,11 +45,11 @@ set(SOURCES
     src/export/text_sanitizer.cpp
 
     # TUI 界面
-    src/ui/app.cpp
-    src/ui/screens/search_screen.cpp
-    src/ui/screens/bookshelf_screen.cpp
-    src/ui/screens/book_detail_screen.cpp
-    src/ui/components/loading_indicator.cpp
+    src/tui/app.cpp
+    src/tui/screens/search_screen.cpp
+    src/tui/screens/bookshelf_screen.cpp
+    src/tui/screens/book_detail_screen.cpp
+    src/tui/components/loading_indicator.cpp
 )
 
 set(RESOURCE_FILES resources.rc)

@@ -4,7 +4,7 @@
 
 struct lua_State;
 
-namespace fanqie {
+namespace novel {
 
 class HttpService;
 
@@ -19,4 +19,4 @@ private:
     std::shared_ptr<HttpService> http_service_;
 };
 
-} // namespace fanqie
+} // namespace novel

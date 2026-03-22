@@ -6,7 +6,7 @@ plugin.manifest = {
     id = "qimao",
     name = "七猫小说",
     version = "1.0.0",
-    author = "fanqie-downloader-tui",
+    author = "novel-downloader-tui",
     description = "七猫小说书源插件，会自行从环境变量或 .env 中读取 QIMAO_APIKEY",
     required_envs = {
         "QIMAO_APIKEY",

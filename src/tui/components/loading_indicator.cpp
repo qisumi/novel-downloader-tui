@@ -1,10 +1,10 @@
-#include "ui/components/loading_indicator.h"
+#include "tui/components/loading_indicator.h"
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/component/component.hpp>
 
 using namespace ftxui;
 
-namespace fanqie {
+namespace novel {
 
 ftxui::Component make_loading_indicator(const std::string* message) {
     static const char* frames[] = {"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"};
@@ -22,4 +22,4 @@ ftxui::Component make_loading_indicator(const std::string* message) {
     });
 }
 
-} // namespace fanqie
+} // namespace novel

@@ -6,7 +6,7 @@ plugin.manifest = {
     id = "fanqie",
     name = "番茄小说",
     version = "1.1.0",
-    author = "fanqie-downloader-tui",
+    author = "novel-downloader-tui",
     description = "默认番茄小说书源插件，会自行从环境变量或 .env 中读取 FANQIE_APIKEY",
     required_envs = {
         "FANQIE_APIKEY",

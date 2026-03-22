@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-namespace fanqie {
+namespace novel {
 
 struct HttpRequest {
     std::string method = "GET";
@@ -33,4 +33,4 @@ public:
 
 std::string url_encode(const std::string& value);
 
-} // namespace fanqie
+} // namespace novel

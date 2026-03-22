@@ -1,5 +1,5 @@
-#include "ui/screens/bookshelf_screen.h"
-#include "ui/screens/book_detail_screen.h"
+#include "tui/screens/bookshelf_screen.h"
+#include "tui/screens/book_detail_screen.h"
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -7,7 +7,7 @@
 
 using namespace ftxui;
 
-namespace fanqie {
+namespace novel {
 
 ftxui::Component make_bookshelf_screen(
     std::shared_ptr<AppContext> ctx,
@@ -267,4 +267,4 @@ ftxui::Component make_bookshelf_screen(
     return handler;
 }
 
-} // namespace fanqie
+} // namespace novel

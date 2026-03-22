@@ -5,7 +5,7 @@
 #include <memory>
 #include <stdexcept>
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -310,4 +310,4 @@ int Database::cached_chapter_count(const std::string& source_id, const std::stri
     return 0;
 }
 
-} // namespace fanqie
+} // namespace novel

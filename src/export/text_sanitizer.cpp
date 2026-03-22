@@ -3,7 +3,7 @@
 #include <cctype>
 #include <sstream>
 
-namespace fanqie::text_sanitizer {
+namespace novel::text_sanitizer {
 
 static void replace_all(std::string& s,
                         const std::string& from,
@@ -131,4 +131,4 @@ std::string html_to_plain_text(const std::string& input) {
     return s;
 }
 
-} // namespace fanqie::text_sanitizer
+} // namespace novel::text_sanitizer

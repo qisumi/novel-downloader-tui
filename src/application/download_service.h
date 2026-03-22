@@ -6,7 +6,7 @@
 
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 class LibraryService;
 class SourceManager;
@@ -34,4 +34,4 @@ private:
     std::shared_ptr<LibraryService> library_service_;
 };
 
-} // namespace fanqie
+} // namespace novel

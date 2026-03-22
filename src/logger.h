@@ -6,12 +6,12 @@
 #include <memory>
 #include <string>
 
-namespace fanqie {
+namespace novel {
 
 /// 初始化全局 logger。
-/// TUI 应用不能向 stdout/stderr 直接输出，因此默认只写文件（fanqie.log）。
+/// TUI 应用不能向 stdout/stderr 直接输出，因此默认只写文件（novel.log）。
 /// 若 also_stderr = true，则同时向 stderr 输出（调试时可开启，但会破坏 TUI 渲染）。
-inline void init_logger(const std::string& log_file = "fanqie.log",
+inline void init_logger(const std::string& log_file = "novel.log",
                         bool also_stderr = false)
 {
     std::vector<spdlog::sink_ptr> sinks;
@@ -38,4 +38,4 @@ inline void init_logger(const std::string& log_file = "fanqie.log",
     spdlog::info("Logger initialized. Log file: {}", log_file);
 }
 
-} // namespace fanqie
+} // namespace novel

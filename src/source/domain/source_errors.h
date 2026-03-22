@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace fanqie {
+namespace novel {
 
 enum class SourceErrorCode {
     PluginLoadFailed,
@@ -61,13 +61,13 @@ inline std::string_view source_error_code_name(SourceErrorCode code) {
 inline std::optional<std::string_view> source_error_prefix(SourceErrorCode code) {
     switch (code) {
     case SourceErrorCode::PluginConfigError:
-        return "__fanqie_config_error__:";
+        return "__novel_config_error__:";
     case SourceErrorCode::PluginRequestError:
-        return "__fanqie_request_error__:";
+        return "__novel_request_error__:";
     case SourceErrorCode::PluginDataError:
-        return "__fanqie_data_error__:";
+        return "__novel_data_error__:";
     case SourceErrorCode::NetworkError:
-        return "__fanqie_network_error__:";
+        return "__novel_network_error__:";
     default:
         return std::nullopt;
     }
@@ -185,4 +185,4 @@ private:
     SourceError error_;
 };
 
-} // namespace fanqie
+} // namespace novel

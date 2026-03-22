@@ -4,7 +4,7 @@
 
 #include "source/domain/source_errors.h"
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -127,4 +127,4 @@ std::optional<Chapter> parse_optional_chapter(const luabridge::LuaRef& table, co
     return parse_chapter_table(table, source_id);
 }
 
-} // namespace fanqie
+} // namespace novel

@@ -1,7 +1,9 @@
-# 番茄小说 TUI 下载器
+# 小说下载 TUI 工具
 
-基于 **番茄小说 API** 的终端界面（TUI）小说下载与 EPUB/TXT 导出工具，  
+基于 **多书源插件** 的终端界面（TUI）小说下载与 EPUB/TXT 导出工具，  
 使用 C++20 编写。
+
+当前终端界面实现位于 `src/tui/`，并预留 `src/gui/` 作为后续 Windows 平台 WinUI 3 图形界面迁移入口。
 
 支持通过命令行参数、系统环境变量或项目根目录下的 `.env` 文件配置 API Key、数据库路径、导出目录和书源插件目录。
 
@@ -35,7 +37,7 @@
 ## 目录结构
 
 ```
-fanqie-downloader-tui/
+novel-downloader-tui/
 ├── CMakeLists.txt
 ├── vcpkg.json                  # VCPKG 清单
 ├── plugins/                    # Lua 书源插件目录
@@ -64,15 +66,16 @@ fanqie-downloader-tui/
     │   ├── epub_exporter.cpp
     │   ├── txt_exporter.h      # TXT 导出接口
     │   └── txt_exporter.cpp
-    └── ui/
-        ├── app.h               # 应用上下文 & run_app()
-        ├── app.cpp             # 主循环、标签栏
-        ├── screens/
-        │   ├── search_screen.*       # 搜索页
-        │   ├── bookshelf_screen.*    # 书架页
-        │   ├── book_detail_screen.*  # 书籍详情 + 目录
-        └── components/
-            └── loading_indicator.*   # 旋转加载动画
+    ├── tui/
+    │   ├── app.h               # 应用上下文 & run_app()
+    │   ├── app.cpp             # 主循环、标签栏
+    │   ├── screens/
+    │   │   ├── search_screen.*       # 搜索页
+    │   │   ├── bookshelf_screen.*    # 书架页
+    │   │   └── book_detail_screen.*  # 书籍详情 + 目录
+    │   └── components/
+    │       └── loading_indicator.*   # 旋转加载动画
+    └── gui/                     # 预留给 WinUI 3 迁移
 ```
 
 ## 构建
@@ -94,7 +97,7 @@ cmake --preset windows-x64-debug
 cmake --build --preset windows-x64-debug
 
 # 4. 运行
-.\build\debug\fanqie-downloader-tui.exe
+.\build\debug\novel-downloader-tui.exe
 ```
 
 ### Release 构建
@@ -126,7 +129,7 @@ cmake --build --preset windows-x64-release-static
 
 ### 使用 `.env.example`
 
-仓库提供了示例文件 [.env.example](/c:/Users/qisum/repos/fanqie-downloader-tui/.env.example)。首次使用可以直接复制一份：
+仓库提供了示例文件 [.env.example](.env.example)。首次使用可以直接复制一份：
 
 ```powershell
 Copy-Item .env.example .env
@@ -135,29 +138,28 @@ Copy-Item .env.example .env
 然后编辑 `.env`：
 
 ```dotenv
-FANQIE_APIKEY=your_api_key
-FANQIE_DB=fanqie.db
-FANQIE_EPUB_DIR=.
-FANQIE_PLUGIN_DIR=plugins
-FANQIE_SOURCE=fanqie
+NOVEL_DB=novel.db
+NOVEL_EPUB_DIR=.
+NOVEL_PLUGIN_DIR=plugins
+NOVEL_SOURCE=fanqie
 ```
 
 说明：
 
-- `FANQIE_APIKEY`：当前书源所需的 API Key，建议自行填写有效值
-- `FANQIE_DB`：SQLite 数据库文件路径
-- `FANQIE_EPUB_DIR`：EPUB/TXT 导出目录
-- `FANQIE_PLUGIN_DIR`：Lua 书源插件目录
-- `FANQIE_SOURCE`：默认书源 ID
+- `NOVEL_DB`：SQLite 数据库文件路径
+- `NOVEL_EPUB_DIR`：EPUB/TXT 导出目录
+- `NOVEL_PLUGIN_DIR`：Lua 书源插件目录
+- `NOVEL_SOURCE`：默认书源 ID
+- 如果当前选中的书源还需要额外配置，请按该插件的说明补充对应的环境变量，例如 `FANQIE_APIKEY`
 
 如果同时设置了 `.env`、系统环境变量和命令行参数，最终以命令行参数为准。
 
 ### 命令行示例
 
 ```powershell
-.\build\release\fanqie-downloader-tui.exe
-.\build\release\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books --plugin-dir .\plugins
-.\build\release-static\fanqie-downloader-tui.exe --db .\fanqie.db -o .\books --source fanqie
+.\build\release\novel-downloader-tui.exe
+.\build\release\novel-downloader-tui.exe --db .\novel.db -o .\books --plugin-dir .\plugins
+.\build\release-static\novel-downloader-tui.exe --db .\novel.db -o .\books --source fanqie
 ```
 
 ## 操作方式
@@ -214,11 +216,10 @@ FANQIE_SOURCE=fanqie
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `FANQIE_APIKEY` | 当前书源所需的 API 密钥 | 空 |
-| `FANQIE_DB` | SQLite 数据库路径 | `fanqie.db` |
-| `FANQIE_EPUB_DIR` | EPUB/TXT 输出目录 | 当前目录 |
-| `FANQIE_PLUGIN_DIR` | Lua 插件目录 | `plugins` |
-| `FANQIE_SOURCE` | 默认书源 ID | 首个成功加载的书源 |
+| `NOVEL_DB` | SQLite 数据库路径 | `novel.db` |
+| `NOVEL_EPUB_DIR` | EPUB/TXT 输出目录 | 当前目录 |
+| `NOVEL_PLUGIN_DIR` | Lua 插件目录 | `plugins` |
+| `NOVEL_SOURCE` | 默认书源 ID | 首个成功加载的书源 |
 
 ## 数据库 Schema 概览
 

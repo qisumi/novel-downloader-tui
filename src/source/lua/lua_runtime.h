@@ -6,7 +6,7 @@
 #include <lua.hpp>
 #include <luabridge3/LuaBridge/LuaBridge.h>
 
-namespace fanqie {
+namespace novel {
 
 class HostApi;
 
@@ -26,4 +26,4 @@ private:
     std::shared_ptr<HostApi> host_api_;
 };
 
-} // namespace fanqie
+} // namespace novel

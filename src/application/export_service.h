@@ -7,7 +7,7 @@
 
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 class DownloadService;
 
@@ -29,4 +29,4 @@ private:
     std::shared_ptr<DownloadService> download_service_;
 };
 
-} // namespace fanqie
+} // namespace novel

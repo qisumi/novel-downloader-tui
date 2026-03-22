@@ -11,7 +11,7 @@
 
 #include "source/domain/book_source.h"
 
-namespace fanqie {
+namespace novel {
 
 class LuaRuntime;
 
@@ -46,4 +46,4 @@ private:
     std::mutex                  mutex_;
 };
 
-} // namespace fanqie
+} // namespace novel

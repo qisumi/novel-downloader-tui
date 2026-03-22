@@ -6,7 +6,7 @@
 
 #include "source/host/host_api.h"
 
-namespace fanqie {
+namespace novel {
 
 namespace {
 
@@ -71,4 +71,4 @@ luabridge::LuaRef LuaRuntime::load_plugin(const std::string& plugin_path) {
     return plugin;
 }
 
-} // namespace fanqie
+} // namespace novel

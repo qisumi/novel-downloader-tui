@@ -9,7 +9,7 @@
 
 #include "models/book.h"
 
-namespace fanqie {
+namespace novel {
 
 Book parse_book_table(const luabridge::LuaRef& table, const std::string& source_id);
 TocItem parse_toc_item_table(const luabridge::LuaRef& table, const std::string& source_id);
@@ -20,4 +20,4 @@ std::vector<TocItem> parse_toc_list(const luabridge::LuaRef& table, const std::s
 std::optional<Book> parse_optional_book(const luabridge::LuaRef& table, const std::string& source_id);
 std::optional<Chapter> parse_optional_chapter(const luabridge::LuaRef& table, const std::string& source_id);
 
-} // namespace fanqie
+} // namespace novel

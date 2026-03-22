@@ -11,7 +11,7 @@
 #include "models/book.h"
 #include "source/runtime/source_manager.h"
 
-namespace fanqie {
+namespace novel {
 
 struct AppContext {
     std::shared_ptr<SourceManager>  source_manager;
@@ -34,4 +34,4 @@ struct AppContext {
 
 int run_app(std::shared_ptr<AppContext> ctx);
 
-} // namespace fanqie
+} // namespace novel
