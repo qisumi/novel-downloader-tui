@@ -1,7 +1,7 @@
 {
   "name": "novel-downloader",
   "version": "0.2.0",
-  "description": "小说下载与导出工具 —— 基于 Lua 插件、SQLite 与 WinUI GUI bridge",
+  "description": "小说下载与导出工具 —— 基于 Lua 插件、SQLite 的 C++ 核心能力层",
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c",
   "dependencies": [
     {

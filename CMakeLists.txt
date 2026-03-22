@@ -16,7 +16,7 @@ endif()
 
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(FATAL_ERROR
-        "The native GUI bridge currently requires the MSVC toolchain.")
+        "This project currently expects the MSVC toolchain on Windows.")
 endif()
 
 message(STATUS "Compiler family: ${NOVEL_COMPILER_FAMILY}")
@@ -57,25 +57,11 @@ set(COMMON_SOURCES
     src/export/text_sanitizer.cpp
 )
 
-set(GUI_BACKEND_SOURCES
-    src/gui/backend/backend_bridge.cpp
-    src/gui/backend/bridge_exports.cpp
-)
-
-set(RESOURCE_FILES)
-if (WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources.rc")
-    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/logo.ico")
-        list(APPEND RESOURCE_FILES resources.rc)
-    else()
-        message(WARNING "logo.ico not found; skipping resources.rc for this build.")
-    endif()
-endif()
-
-add_library(novel-gui-bridge SHARED
+add_library(novel-core STATIC
     ${COMMON_SOURCES}
-    ${GUI_BACKEND_SOURCES}
-    ${RESOURCE_FILES}
 )
+
+add_library(novel::core ALIAS novel-core)
 
 set(IS_STATIC_TRIPLET OFF)
 if (DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "-static")
@@ -83,7 +69,7 @@ if (DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "-static")
 endif()
 
 set(NOVEL_NATIVE_TARGETS
-    novel-gui-bridge
+    novel-core
 )
 
 foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
@@ -122,40 +108,14 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
         )
         target_link_libraries(${target_name} PRIVATE ws2_32)
 
-        # 动态链接场景下，构建后自动把第三方 DLL 复制到目标目录，
-        # 便于直接打包整个 release 目录发布。
-        if (NOT IS_STATIC_TRIPLET)
-            add_custom_command(TARGET ${target_name} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_RUNTIME_DLLS:${target_name}>
-                    $<TARGET_FILE_DIR:${target_name}>
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
-                    $<TARGET_FILE_DIR:${target_name}>/plugins
-                COMMAND_EXPAND_LISTS
-            )
-        else()
-            add_custom_command(TARGET ${target_name} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_directory
-                    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
-                    $<TARGET_FILE_DIR:${target_name}>/plugins
-            )
-        endif()
     endif()
 endforeach()
 
 # ── 安装 ────────────────────────────────────────────────────────────────────
-install(TARGETS novel-gui-bridge
-    RUNTIME DESTINATION bin
-    LIBRARY DESTINATION bin
+install(TARGETS novel-core
+    ARCHIVE DESTINATION lib
 )
 
 install(DIRECTORY plugins/
     DESTINATION bin/plugins
 )
-
-if (WIN32 AND NOT IS_STATIC_TRIPLET)
-    install(FILES $<TARGET_RUNTIME_DLLS:novel-gui-bridge>
-        DESTINATION bin
-    )
-endif()
