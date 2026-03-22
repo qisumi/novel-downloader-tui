@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 namespace fanqie {
 
@@ -10,6 +11,8 @@ struct SourceInfo {
     std::string version;
     std::string author;
     std::string description;
+    std::vector<std::string> required_envs;
+    std::vector<std::string> optional_envs;
 };
 
 struct SourceCapabilities {

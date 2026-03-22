@@ -1,6 +1,7 @@
 #include "ui/screens/book_detail_screen.h"
 #include "export/epub_exporter.h"
 #include "export/txt_exporter.h"
+#include "source/domain/source_errors.h"
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -122,6 +123,12 @@ ftxui::Component make_book_detail_screen(
                 ? (force_remote ? "目录更新失败" : "目录加载失败")
                 : (force_remote ? "目录已更新" : "");
             screen.PostEvent(Event::Custom);
+            } catch (const SourceException& e) {
+                spdlog::error("load_toc() source error: {}", format_source_error_log(e.error()));
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = e.what();
+                screen.PostEvent(Event::Custom);
             } catch (const std::exception& e) {
                 spdlog::error("load_toc() exception: {}", e.what());
                 std::lock_guard lock(state->mtx);
@@ -158,6 +165,12 @@ ftxui::Component make_book_detail_screen(
                 std::lock_guard lock(state->mtx);
                 state->loading = false;
                 state->status_msg = "下载完成！";
+                screen.PostEvent(Event::Custom);
+            } catch (const SourceException& e) {
+                spdlog::error("download_all() source error: {}", format_source_error_log(e.error()));
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = e.what();
                 screen.PostEvent(Event::Custom);
             } catch (const std::exception& e) {
                 std::lock_guard lock(state->mtx);
@@ -244,6 +257,12 @@ ftxui::Component make_book_detail_screen(
                 state->status_msg = path.empty()
                     ? (as_epub ? "EPUB 导出失败" : "TXT 导出失败")
                     : ("已导出：" + path);
+                screen.PostEvent(Event::Custom);
+            } catch (const SourceException& e) {
+                spdlog::error("export_by_format() source error: {}", format_source_error_log(e.error()));
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = e.what();
                 screen.PostEvent(Event::Custom);
             } catch (const std::exception& e) {
                 std::lock_guard lock(state->mtx);

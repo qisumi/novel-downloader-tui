@@ -1,75 +1,74 @@
+local common = require("_shared.common")
+
 local plugin = {}
 
 plugin.manifest = {
     id = "fanqie",
     name = "番茄小说",
-    version = "1.0.0",
+    version = "1.1.0",
     author = "fanqie-downloader-tui",
     description = "默认番茄小说书源插件，会自行从环境变量或 .env 中读取 FANQIE_APIKEY",
+    required_envs = {
+        "FANQIE_APIKEY",
+    },
+    optional_envs = {},
 }
+
+local API_URL = "http://v3.rain.ink/fanqie/"
 
 local ctx = {
     api_key = "",
 }
 
-local function safe_get(tbl, key, fallback)
-    local value = tbl[key]
-    if value == nil then
-        return fallback
-    end
-    return value
-end
-
 local function parse_book(data)
     return {
-        book_id = tostring(safe_get(data, "book_id", "")),
-        title = tostring(safe_get(data, "book_name", safe_get(data, "title", ""))),
-        author = tostring(safe_get(data, "author", "")),
-        cover_url = tostring(safe_get(data, "thumb_url", safe_get(data, "cover_url", ""))),
-        abstract = tostring(safe_get(data, "abstract", "")),
-        category = tostring(safe_get(data, "category", "")),
-        word_count = tostring(safe_get(data, "word_number", safe_get(data, "word_count", ""))),
-        score = tonumber(safe_get(data, "score", 0)) or 0,
-        gender = tonumber(safe_get(data, "gender", 0)) or 0,
-        creation_status = tonumber(safe_get(data, "creation_status", 0)) or 0,
-        last_chapter_title = tostring(safe_get(data, "last_chapter_title", "")),
-        last_update_time = tonumber(safe_get(data, "last_chapter_update_time", 0)) or 0,
+        book_id = common.get_string(data, "book_id", ""),
+        title = common.get_string(data, "book_name", common.get_string(data, "title", "")),
+        author = common.get_string(data, "author", ""),
+        cover_url = common.get_string(data, "thumb_url", common.get_string(data, "cover_url", "")),
+        abstract = common.get_string(data, "abstract", ""),
+        category = common.get_string(data, "category", ""),
+        word_count = common.get_string(data, "word_number", common.get_string(data, "word_count", "")),
+        score = common.get_number(data, "score", 0),
+        gender = common.get_number(data, "gender", 0),
+        creation_status = common.get_number(data, "creation_status", 0),
+        last_chapter_title = common.get_string(data, "last_chapter_title", ""),
+        last_update_time = common.get_number(data, "last_chapter_update_time", 0),
     }
-end
-
-local function request(url)
-    local body, err = host.http_get(url)
-    if body == nil then
-        error(err or ("request failed: " .. url))
-    end
-    return host.json_parse(body)
 end
 
 local function ensure_api_key()
     if ctx.api_key == "" then
-        ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
+        ctx.api_key = common.require_env("FANQIE_APIKEY")
     end
-    if ctx.api_key == "" then
-        host.config_error("missing FANQIE_APIKEY; please set it in the environment or .env")
-    end
+    return ctx.api_key
 end
 
-local function build_url(type_id, extra_params)
-    ensure_api_key()
-    local url = "http://v3.rain.ink/fanqie/?apikey=" .. ctx.api_key .. "&type=" .. tostring(type_id)
-    if extra_params ~= nil and extra_params ~= "" then
-        url = url .. "&" .. extra_params
+local function build_url(type_id, params)
+    local query = {
+        apikey = ensure_api_key(),
+        type = type_id,
+    }
+
+    if params ~= nil then
+        for key, value in pairs(params) do
+            query[key] = value
+        end
     end
-    return url
+
+    return common.append_query(API_URL, query)
 end
 
 function plugin.configure()
-    ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
+    ctx.api_key = common.require_env("FANQIE_APIKEY")
 end
 
 function plugin.search(keywords, page)
-    local encoded = host.url_encode(keywords)
-    local root = request(build_url(1, "keywords=" .. encoded .. "&page=" .. tostring(page * 10)))
+    local root = common.get_json(build_url(1, {
+        keywords = keywords,
+        page = page * 10,
+    }))
+
     local results = {}
 
     if root.search_tabs ~= nil then
@@ -99,7 +98,9 @@ function plugin.search(keywords, page)
 end
 
 function plugin.get_book_info(book_id)
-    local root = request(build_url(2, "bookid=" .. host.url_encode(book_id)))
+    local root = common.get_json(build_url(2, {
+        bookid = book_id,
+    }))
     if root.data == nil then
         return nil
     end
@@ -107,7 +108,10 @@ function plugin.get_book_info(book_id)
 end
 
 function plugin.get_toc(book_id)
-    local root = request(build_url(3, "bookid=" .. host.url_encode(book_id)))
+    local root = common.get_json(build_url(3, {
+        bookid = book_id,
+    }))
+
     local results = {}
     local items = root.data and root.data.item_data_list or nil
     if items == nil then
@@ -116,18 +120,21 @@ function plugin.get_toc(book_id)
 
     for _, item in ipairs(items) do
         table.insert(results, {
-            item_id = tostring(safe_get(item, "item_id", "")),
-            title = tostring(safe_get(item, "title", "")),
-            volume_name = tostring(safe_get(item, "volume_name", "")),
-            word_count = tonumber(safe_get(item, "chapter_word_number", 0)) or 0,
-            update_time = tonumber(safe_get(item, "first_pass_time", 0)) or 0,
+            item_id = common.get_string(item, "item_id", ""),
+            title = common.get_string(item, "title", ""),
+            volume_name = common.get_string(item, "volume_name", ""),
+            word_count = common.get_number(item, "chapter_word_number", 0),
+            update_time = common.get_number(item, "first_pass_time", 0),
         })
     end
+
     return results
 end
 
 function plugin.get_chapter(book_id, item_id)
-    local root = request(build_url(4, "itemid=" .. host.url_encode(item_id)))
+    local root = common.get_json(build_url(4, {
+        itemid = item_id,
+    }))
     if root.data == nil or root.data.content == nil then
         return nil
     end

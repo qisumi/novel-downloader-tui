@@ -60,6 +60,9 @@ void SourceManager::load_from_directory(const std::string& plugin_dir) {
 
             spdlog::info("Loaded source '{}' from {}", source->info().id, path.string());
             sources_.push_back(std::move(source));
+        } catch (const SourceException& e) {
+            spdlog::error("Failed to load plugin {}: {}", path.string(),
+                          format_source_error_log(e.error()));
         } catch (const std::exception& e) {
             spdlog::error("Failed to load plugin {}: {}", path.string(), e.what());
         }

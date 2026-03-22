@@ -1,5 +1,6 @@
 #include "ui/screens/search_screen.h"
 #include "ui/screens/book_detail_screen.h"
+#include "source/domain/source_errors.h"
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/dom/elements.hpp>
@@ -50,15 +51,29 @@ ftxui::Component make_search_screen(
         screen.PostEvent(Event::Custom);
 
         std::thread([=, &screen]() {
-            auto results = ctx->library_service->search_books(state->keyword);
-            spdlog::info("search_screen: received {} results for '{}'",
-                         results.size(), state->keyword);
-            std::lock_guard lock(state->mtx);
-            state->results   = std::move(results);
-            state->loading   = false;
-            state->status_msg = state->results.empty() ? "无结果" : "";
-            state->selected  = 0;
-            screen.PostEvent(Event::Custom);
+            try {
+                auto results = ctx->library_service->search_books(state->keyword);
+                spdlog::info("search_screen: received {} results for '{}'",
+                             results.size(), state->keyword);
+                std::lock_guard lock(state->mtx);
+                state->results = std::move(results);
+                state->loading = false;
+                state->status_msg = state->results.empty() ? "无结果" : "";
+                state->selected = 0;
+                screen.PostEvent(Event::Custom);
+            } catch (const SourceException& e) {
+                spdlog::error("search_screen: {}", format_source_error_log(e.error()));
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = e.what();
+                screen.PostEvent(Event::Custom);
+            } catch (const std::exception& e) {
+                spdlog::error("search_screen: search failed: {}", e.what());
+                std::lock_guard lock(state->mtx);
+                state->loading = false;
+                state->status_msg = "搜索失败：" + std::string(e.what());
+                screen.PostEvent(Event::Custom);
+            }
         }).detach();
     };
 

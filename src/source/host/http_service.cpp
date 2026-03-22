@@ -39,12 +39,38 @@ SplitUrlResult split_url(const std::string& url) {
     return result;
 }
 
+std::string normalize_method(std::string method) {
+    for (char& ch : method) {
+        ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+    }
+    return method;
+}
+
+std::string detect_content_type(const HttpRequest& request) {
+    for (const auto& [key, value] : request.headers) {
+        std::string lower_key;
+        lower_key.reserve(key.size());
+        for (char ch : key) {
+            lower_key.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+        }
+        if (lower_key == "content-type") {
+            return value;
+        }
+    }
+
+    if (!request.content_type.empty()) {
+        return request.content_type;
+    }
+    return "application/json";
+}
+
 } // namespace
 
 std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const {
     SplitUrlResult url = split_url(request.url);
+    std::string    method = normalize_method(request.method);
     spdlog::debug("HTTP {} {} | host={} path={}",
-                  request.method, request.url, url.scheme_host, url.path);
+                  method, request.url, url.scheme_host, url.path);
 
     httplib::Client cli(url.scheme_host);
     cli.set_connection_timeout(request.timeout_seconds, 0);
@@ -57,24 +83,39 @@ std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const 
     }
 
     httplib::Result result;
-    if (request.method == "POST") {
-        result = cli.Post(url.path, headers, request.body, "application/json");
-    } else {
+    if (method == "GET") {
         result = cli.Get(url.path, headers);
+    } else if (method == "POST") {
+        result = cli.Post(url.path, headers, request.body, detect_content_type(request));
+    } else if (method == "PUT") {
+        result = cli.Put(url.path, headers, request.body, detect_content_type(request));
+    } else if (method == "PATCH") {
+        result = cli.Patch(url.path, headers, request.body, detect_content_type(request));
+    } else if (method == "DELETE") {
+        if (!request.body.empty()) {
+            spdlog::warn("HTTP DELETE body is currently ignored: {}", request.url);
+        }
+        result = cli.Delete(url.path, headers);
+    } else if (method == "HEAD") {
+        result = cli.Head(url.path, headers);
+    } else {
+        spdlog::error("HTTP request failed: unsupported method={} url={}", method, request.url);
+        return std::nullopt;
     }
 
     if (!result) {
-        spdlog::error("HTTP request failed: {} {}", request.method, request.url);
+        spdlog::error("HTTP request failed: {} {}", method, request.url);
         return std::nullopt;
     }
 
-    if (result->status < 200 || result->status >= 300) {
-        spdlog::warn("HTTP non-2xx status={} body={}",
-                     result->status, result->body.substr(0, 512));
-        return std::nullopt;
+    HttpResponse response;
+    response.status = result->status;
+    response.body = result->body;
+    for (const auto& [key, value] : result->headers) {
+        response.headers.emplace_back(key, value);
     }
 
-    return HttpResponse{result->status, result->body};
+    return response;
 }
 
 std::optional<HttpResponse> HttpService::get(
@@ -86,7 +127,16 @@ std::optional<HttpResponse> HttpService::get(
     request.url = url;
     request.headers = headers;
     request.timeout_seconds = timeout_seconds;
-    return send(request);
+    auto response = send(request);
+    if (!response) {
+        return std::nullopt;
+    }
+    if (response->status < 200 || response->status >= 300) {
+        spdlog::warn("HTTP non-2xx status={} body={}",
+                     response->status, response->body.substr(0, 512));
+        return std::nullopt;
+    }
+    return response;
 }
 
 std::string url_encode(const std::string& value) {

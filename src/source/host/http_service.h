@@ -12,12 +12,14 @@ struct HttpRequest {
     std::string url;
     std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
+    std::string content_type;
     int timeout_seconds = 30;
 };
 
 struct HttpResponse {
     int status = 0;
     std::string body;
+    std::vector<std::pair<std::string, std::string>> headers;
 };
 
 class HttpService {

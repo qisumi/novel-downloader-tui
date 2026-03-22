@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <CLI/CLI.hpp>
 
@@ -18,10 +19,26 @@
 #include "db/database.h"
 #include "dotenv.h"
 #include "logger.h"
+#include "source/domain/source_errors.h"
 #include "source/host/host_api.h"
 #include "source/host/http_service.h"
 #include "source/runtime/source_manager.h"
 #include "ui/app.h"
+
+namespace {
+
+std::string join_list(const std::vector<std::string>& items) {
+    std::string result;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        if (i > 0) {
+            result += ", ";
+        }
+        result += items[i];
+    }
+    return result;
+}
+
+} // namespace
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
@@ -98,6 +115,12 @@ int main(int argc, char* argv[]) {
                     std::cout << " (" << info.version << ")";
                 }
                 std::cout << "\n";
+                if (!info.required_envs.empty()) {
+                    std::cout << "  required_envs: " << join_list(info.required_envs) << "\n";
+                }
+                if (!info.optional_envs.empty()) {
+                    std::cout << "  optional_envs: " << join_list(info.optional_envs) << "\n";
+                }
             }
             return 0;
         }
@@ -124,7 +147,12 @@ int main(int argc, char* argv[]) {
         }
 
         return fanqie::run_app(ctx);
+    } catch (const fanqie::SourceException& e) {
+        spdlog::error("Initialization failed: {}", fanqie::format_source_error_log(e.error()));
+        std::cerr << "初始化失败: " << e.what() << "\n";
+        return 1;
     } catch (const std::exception& e) {
+        spdlog::error("Initialization failed: {}", e.what());
         std::cerr << "初始化失败: " << e.what() << "\n";
         return 1;
     }
