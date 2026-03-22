@@ -29,8 +29,8 @@ function Reset-Directory([string]$Path) {
 
 function Resolve-BuildDirectory([string]$Preset) {
     switch ($Preset) {
-        "windows-x64-debug-msvc-tui" { return (Join-Path $repoRoot "build/debug-msvc-tui") }
-        "windows-x64-release-msvc-tui" { return (Join-Path $repoRoot "build/release-msvc-tui") }
+        "windows-x64-debug-msvc" { return (Join-Path $repoRoot "build/debug-msvc") }
+        "windows-x64-release-msvc" { return (Join-Path $repoRoot "build/release-msvc") }
         "windows-x64-release-static-msvc" { return (Join-Path $repoRoot "build/release-static-msvc") }
         default { return $null }
     }

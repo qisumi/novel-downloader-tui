@@ -1,20 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
-project(novel-downloader-tui VERSION 0.2.0 LANGUAGES CXX)
+project(novel-downloader VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# ── 构建选项 ────────────────────────────────────────────────────────────────
-set(NOVEL_FRONTEND "TUI" CACHE STRING "Application frontend to build (TUI or GUI)")
-set_property(CACHE NOVEL_FRONTEND PROPERTY STRINGS TUI GUI)
-
-string(TOUPPER "${NOVEL_FRONTEND}" NOVEL_FRONTEND)
-set(NOVEL_FRONTEND "${NOVEL_FRONTEND}" CACHE STRING "Application frontend to build (TUI or GUI)" FORCE)
-
-if (NOT NOVEL_FRONTEND STREQUAL "TUI" AND NOT NOVEL_FRONTEND STREQUAL "GUI")
-    message(FATAL_ERROR "NOVEL_FRONTEND must be TUI or GUI, got: ${NOVEL_FRONTEND}")
-endif()
 
 set(NOVEL_COMPILER_FAMILY "${CMAKE_CXX_COMPILER_ID}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -25,13 +14,11 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(NOVEL_COMPILER_FAMILY "GNU")
 endif()
 
-if (NOVEL_FRONTEND STREQUAL "GUI" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(FATAL_ERROR
-        "GUI frontend currently requires the MSVC toolchain. "
-        "Use -DNOVEL_FRONTEND=TUI for Clang/GNU builds.")
+        "The native GUI bridge currently requires the MSVC toolchain.")
 endif()
 
-message(STATUS "Frontend: ${NOVEL_FRONTEND}")
 message(STATUS "Compiler family: ${NOVEL_COMPILER_FAMILY}")
 
 # ── 依赖 ────────────────────────────────────────────────────────────────────
@@ -45,10 +32,6 @@ find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(Lua REQUIRED)
 find_path(LUABRIDGE3_INCLUDE_DIRS "luabridge3/LuaBridge/Array.h" REQUIRED)
-
-if (NOVEL_FRONTEND STREQUAL "TUI")
-    find_package(ftxui CONFIG REQUIRED)
-endif()
 
 # ── 源文件 ──────────────────────────────────────────────────────────────────
 set(COMMON_SOURCES
@@ -74,19 +57,6 @@ set(COMMON_SOURCES
     src/export/text_sanitizer.cpp
 )
 
-set(TUI_SOURCES
-    src/main.cpp
-    src/tui/app.cpp
-    src/tui/screens/search_screen.cpp
-    src/tui/screens/bookshelf_screen.cpp
-    src/tui/screens/book_detail_screen.cpp
-    src/tui/components/loading_indicator.cpp
-)
-
-set(GUI_SOURCES
-    src/gui/gui_stub_main.cpp
-)
-
 set(GUI_BACKEND_SOURCES
     src/gui/backend/backend_bridge.cpp
     src/gui/backend/bridge_exports.cpp
@@ -101,23 +71,10 @@ if (WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources.rc")
     endif()
 endif()
 
-if (NOVEL_FRONTEND STREQUAL "GUI")
-    add_executable(${PROJECT_NAME} WIN32
-        ${COMMON_SOURCES}
-        ${GUI_SOURCES}
-        ${RESOURCE_FILES}
-    )
-else()
-    add_executable(${PROJECT_NAME}
-        ${COMMON_SOURCES}
-        ${TUI_SOURCES}
-        ${RESOURCE_FILES}
-    )
-endif()
-
 add_library(novel-gui-bridge SHARED
     ${COMMON_SOURCES}
     ${GUI_BACKEND_SOURCES}
+    ${RESOURCE_FILES}
 )
 
 set(IS_STATIC_TRIPLET OFF)
@@ -126,7 +83,6 @@ if (DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "-static")
 endif()
 
 set(NOVEL_NATIVE_TARGETS
-    ${PROJECT_NAME}
     novel-gui-bridge
 )
 
@@ -166,7 +122,7 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
         )
         target_link_libraries(${target_name} PRIVATE ws2_32)
 
-        # 动态链接场景下，构建后自动把第三方 DLL 复制到 exe 同目录，
+        # 动态链接场景下，构建后自动把第三方 DLL 复制到目标目录，
         # 便于直接打包整个 release 目录发布。
         if (NOT IS_STATIC_TRIPLET)
             add_custom_command(TARGET ${target_name} POST_BUILD
@@ -188,16 +144,8 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
     endif()
 endforeach()
 
-if (NOVEL_FRONTEND STREQUAL "TUI")
-    target_link_libraries(${PROJECT_NAME} PRIVATE
-        ftxui::screen
-        ftxui::dom
-        ftxui::component
-    )
-endif()
-
 # ── 安装 ────────────────────────────────────────────────────────────────────
-install(TARGETS ${PROJECT_NAME} novel-gui-bridge
+install(TARGETS novel-gui-bridge
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION bin
 )
@@ -207,7 +155,7 @@ install(DIRECTORY plugins/
 )
 
 if (WIN32 AND NOT IS_STATIC_TRIPLET)
-    install(FILES $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
+    install(FILES $<TARGET_RUNTIME_DLLS:novel-gui-bridge>
         DESTINATION bin
     )
 endif()

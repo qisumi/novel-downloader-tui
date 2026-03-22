@@ -15,43 +15,36 @@
       }
     },
     {
-      "name": "windows-x64-debug-msvc-tui",
-      "displayName": "Windows x64 Debug (MSVC TUI)",
+      "name": "windows-x64-debug-msvc",
+      "displayName": "Windows x64 Debug (MSVC)",
       "inherits": "msvc-base",
-      "binaryDir": "${sourceDir}/build/debug-msvc-tui",
-      "cacheVariables": {
-        "NOVEL_FRONTEND": "TUI"
-      }
+      "binaryDir": "${sourceDir}/build/debug-msvc"
     },
     {
-      "name": "windows-x64-release-msvc-tui",
-      "displayName": "Windows x64 Release (MSVC TUI)",
+      "name": "windows-x64-release-msvc",
+      "displayName": "Windows x64 Release (MSVC)",
       "inherits": "msvc-base",
-      "binaryDir": "${sourceDir}/build/release-msvc-tui",
-      "cacheVariables": {
-        "NOVEL_FRONTEND": "TUI"
-      }
+      "binaryDir": "${sourceDir}/build/release-msvc"
     },
     {
       "name": "windows-x64-release-static-msvc",
-      "displayName": "Windows x64 Release Static (MSVC TUI)",
+      "displayName": "Windows x64 Release Static (MSVC)",
       "inherits": "msvc-base",
       "binaryDir": "${sourceDir}/build/release-static-msvc",
       "cacheVariables": {
-        "NOVEL_FRONTEND": "TUI",
         "VCPKG_TARGET_TRIPLET": "x64-windows-static"
       }
     }
   ],
   "buildPresets": [
     {
-      "name": "windows-x64-debug-msvc-tui",
-      "configurePreset": "windows-x64-debug-msvc-tui",
+      "name": "windows-x64-debug-msvc",
+      "configurePreset": "windows-x64-debug-msvc",
       "configuration": "Debug"
     },
     {
-      "name": "windows-x64-release-msvc-tui",
-      "configurePreset": "windows-x64-release-msvc-tui",
+      "name": "windows-x64-release-msvc",
+      "configurePreset": "windows-x64-release-msvc",
       "configuration": "Release"
     },
     {

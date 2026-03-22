@@ -1,13 +1,9 @@
 {
-  "name": "novel-downloader-tui",
+  "name": "novel-downloader",
   "version": "0.2.0",
-  "description": "小说下载 TUI 工具 —— 基于 FTXUI + SQLite",
+  "description": "小说下载与导出工具 —— 基于 Lua 插件、SQLite 与 WinUI GUI bridge",
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c",
   "dependencies": [
-    {
-      "name": "ftxui",
-      "version>=": "5.0.0"
-    },
     {
       "name": "nlohmann-json",
       "version>=": "3.11.3"
