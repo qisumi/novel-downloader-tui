@@ -11,8 +11,12 @@ CMakeFiles/
 # Ignore build directories and output files
 build/
 out/
+dist/
+exports/
 *.epub
-fanqie.db
+*.db
+*.db-shm
+*.db-wal
 *.txt
 *.log
 plans/
@@ -22,3 +26,13 @@ plans/
 *.user
 compile_commands.json
 .vscode/
+
+# Ignore WinUI / .NET GUI artifacts
+src/gui/NovelDownloaderGui/bin/
+src/gui/NovelDownloaderGui/obj/
+src/gui/NovelDownloaderGui/*.csproj.user
+src/gui/NovelDownloaderGui/*.suo
+src/gui/NovelDownloaderGui/BundleArtifacts/
+src/gui/NovelDownloaderGui/TestResults/
+*.appxrecipe
+*.aps

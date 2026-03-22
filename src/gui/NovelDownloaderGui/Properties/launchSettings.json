@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NovelDownloaderGui (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NovelDownloaderGui (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

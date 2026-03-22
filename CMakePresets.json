@@ -2,26 +2,6 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "windows-base",
-      "hidden": true,
-      "generator": "Ninja",
-      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-      "cacheVariables": {
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "VCPKG_TARGET_TRIPLET": "x64-windows"
-      }
-    },
-    {
-      "name": "clang-tui-base",
-      "hidden": true,
-      "inherits": "windows-base",
-      "cacheVariables": {
-        "NOVEL_FRONTEND": "TUI",
-        "CMAKE_C_COMPILER": "clang-cl",
-        "CMAKE_CXX_COMPILER": "clang-cl"
-      }
-    },
-    {
       "name": "msvc-base",
       "hidden": true,
       "generator": "Visual Studio 18 2026",
@@ -32,34 +12,6 @@
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows"
-      }
-    },
-    {
-      "name": "windows-x64-debug",
-      "displayName": "Windows x64 Debug (Clang TUI)",
-      "inherits": "clang-tui-base",
-      "binaryDir": "${sourceDir}/build/debug",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
-      }
-    },
-    {
-      "name": "windows-x64-release",
-      "displayName": "Windows x64 Release (Clang TUI)",
-      "inherits": "clang-tui-base",
-      "binaryDir": "${sourceDir}/build/release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "windows-x64-release-static",
-      "displayName": "Windows x64 Release Static (Clang TUI)",
-      "inherits": "clang-tui-base",
-      "binaryDir": "${sourceDir}/build/release-static",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
       }
     },
     {
@@ -81,24 +33,6 @@
       }
     },
     {
-      "name": "windows-x64-debug-msvc-gui",
-      "displayName": "Windows x64 Debug (MSVC GUI)",
-      "inherits": "msvc-base",
-      "binaryDir": "${sourceDir}/build/debug-msvc-gui",
-      "cacheVariables": {
-        "NOVEL_FRONTEND": "GUI"
-      }
-    },
-    {
-      "name": "windows-x64-release-msvc-gui",
-      "displayName": "Windows x64 Release (MSVC GUI)",
-      "inherits": "msvc-base",
-      "binaryDir": "${sourceDir}/build/release-msvc-gui",
-      "cacheVariables": {
-        "NOVEL_FRONTEND": "GUI"
-      }
-    },
-    {
       "name": "windows-x64-release-static-msvc",
       "displayName": "Windows x64 Release Static (MSVC TUI)",
       "inherits": "msvc-base",
@@ -111,18 +45,6 @@
   ],
   "buildPresets": [
     {
-      "name": "windows-x64-debug",
-      "configurePreset": "windows-x64-debug"
-    },
-    {
-      "name": "windows-x64-release",
-      "configurePreset": "windows-x64-release"
-    },
-    {
-      "name": "windows-x64-release-static",
-      "configurePreset": "windows-x64-release-static"
-    },
-    {
       "name": "windows-x64-debug-msvc-tui",
       "configurePreset": "windows-x64-debug-msvc-tui",
       "configuration": "Debug"
@@ -130,16 +52,6 @@
     {
       "name": "windows-x64-release-msvc-tui",
       "configurePreset": "windows-x64-release-msvc-tui",
-      "configuration": "Release"
-    },
-    {
-      "name": "windows-x64-debug-msvc-gui",
-      "configurePreset": "windows-x64-debug-msvc-gui",
-      "configuration": "Debug"
-    },
-    {
-      "name": "windows-x64-release-msvc-gui",
-      "configurePreset": "windows-x64-release-msvc-gui",
       "configuration": "Release"
     },
     {

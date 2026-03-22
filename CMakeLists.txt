@@ -87,6 +87,11 @@ set(GUI_SOURCES
     src/gui/gui_stub_main.cpp
 )
 
+set(GUI_BACKEND_SOURCES
+    src/gui/backend/backend_bridge.cpp
+    src/gui/backend/bridge_exports.cpp
+)
+
 set(RESOURCE_FILES)
 if (WIN32 AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources.rc")
     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/logo.ico")
@@ -110,35 +115,78 @@ else()
     )
 endif()
 
+add_library(novel-gui-bridge SHARED
+    ${COMMON_SOURCES}
+    ${GUI_BACKEND_SOURCES}
+)
+
 set(IS_STATIC_TRIPLET OFF)
 if (DEFINED VCPKG_TARGET_TRIPLET AND VCPKG_TARGET_TRIPLET MATCHES "-static")
     set(IS_STATIC_TRIPLET ON)
 endif()
 
-# 静态 triplet 下优先静态链接 MSVC 运行时，便于单文件发布。
-if (MSVC AND IS_STATIC_TRIPLET)
-    set_property(TARGET ${PROJECT_NAME} PROPERTY
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endif()
-
-target_include_directories(${PROJECT_NAME} PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${LUABRIDGE3_INCLUDE_DIRS}
-    ${LUA_INCLUDE_DIR}
+set(NOVEL_NATIVE_TARGETS
+    ${PROJECT_NAME}
+    novel-gui-bridge
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE
-    nlohmann_json::nlohmann_json
-    SQLiteCpp
-    httplib::httplib
-    tinyxml2::tinyxml2
-    libzip::zip
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    CLI11::CLI11
-    spdlog::spdlog
-    ${LUA_LIBRARIES}
-)
+foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
+    # 静态 triplet 下优先静态链接 MSVC 运行时，便于单文件发布。
+    if (MSVC AND IS_STATIC_TRIPLET)
+        set_property(TARGET ${target_name} PROPERTY
+            MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
+
+    target_include_directories(${target_name} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${LUABRIDGE3_INCLUDE_DIRS}
+        ${LUA_INCLUDE_DIR}
+    )
+
+    target_link_libraries(${target_name} PRIVATE
+        nlohmann_json::nlohmann_json
+        SQLiteCpp
+        httplib::httplib
+        tinyxml2::tinyxml2
+        libzip::zip
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        CLI11::CLI11
+        spdlog::spdlog
+        ${LUA_LIBRARIES}
+    )
+
+    # Windows 下防止控制台乱码
+    if (WIN32)
+        target_compile_definitions(${target_name} PRIVATE
+            NOMINMAX
+            WIN32_LEAN_AND_MEAN
+            _WIN32_WINNT=0x0A00
+            _CRT_SECURE_NO_WARNINGS
+        )
+        target_link_libraries(${target_name} PRIVATE ws2_32)
+
+        # 动态链接场景下，构建后自动把第三方 DLL 复制到 exe 同目录，
+        # 便于直接打包整个 release 目录发布。
+        if (NOT IS_STATIC_TRIPLET)
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_RUNTIME_DLLS:${target_name}>
+                    $<TARGET_FILE_DIR:${target_name}>
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
+                    $<TARGET_FILE_DIR:${target_name}>/plugins
+                COMMAND_EXPAND_LISTS
+            )
+        else()
+            add_custom_command(TARGET ${target_name} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    ${CMAKE_CURRENT_SOURCE_DIR}/plugins
+                    $<TARGET_FILE_DIR:${target_name}>/plugins
+            )
+        endif()
+    endif()
+endforeach()
 
 if (NOVEL_FRONTEND STREQUAL "TUI")
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -148,40 +196,10 @@ if (NOVEL_FRONTEND STREQUAL "TUI")
     )
 endif()
 
-# Windows 下防止控制台乱码
-if (WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
-        NOMINMAX
-        WIN32_LEAN_AND_MEAN
-        _WIN32_WINNT=0x0A00
-        _CRT_SECURE_NO_WARNINGS
-    )
-    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32)
-
-    # 动态链接场景下，构建后自动把第三方 DLL 复制到 exe 同目录，
-    # 便于直接打包整个 release 目录发布。
-    if (NOT IS_STATIC_TRIPLET)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}>
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_CURRENT_SOURCE_DIR}/plugins
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins
-            COMMAND_EXPAND_LISTS
-        )
-    else()
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                ${CMAKE_CURRENT_SOURCE_DIR}/plugins
-                $<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins
-        )
-    endif()
-endif()
-
 # ── 安装 ────────────────────────────────────────────────────────────────────
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS ${PROJECT_NAME} novel-gui-bridge
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
 )
 
 install(DIRECTORY plugins/

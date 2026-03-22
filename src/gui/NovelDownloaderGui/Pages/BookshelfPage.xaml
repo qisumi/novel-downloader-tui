@@ -1,0 +1,98 @@
+<Page
+    x:Class="NovelDownloaderGui.Pages.BookshelfPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NovelDownloaderGui.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <Grid
+        Padding="24,20,24,24"
+        RowSpacing="16"
+        SizeChanged="OnPageSizeChanged">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Text="本地书架" />
+                <TextBlock
+                    x:Name="BookshelfHintText"
+                    FontSize="14"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="显示当前书源下已收藏的书籍。" />
+            </StackPanel>
+            <Button
+                Grid.Column="1"
+                Click="OnRefreshClicked"
+                Content="刷新"
+                VerticalAlignment="Bottom" />
+        </Grid>
+
+        <Grid
+            x:Name="ContentGrid"
+            Grid.Row="1"
+            ColumnSpacing="16"
+            RowSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Border
+                x:Name="BooksPane"
+                Grid.Column="0"
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="16">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Text="收藏列表" />
+                    <InfoBar
+                        x:Name="BookshelfStatusBar"
+                        Grid.Row="1"
+                        IsOpen="False"
+                        Severity="Informational" />
+                    <ListView
+                        x:Name="BookshelfListView"
+                        Grid.Row="2"
+                        SelectionChanged="OnBooksSelectionChanged">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Spacing="4">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" TextWrapping="WrapWholeWords" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{Binding Author}" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{Binding LastChapterTitle}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
+
+            <controls:BookDetailControl
+                x:Name="DetailControl"
+                Grid.Column="1"
+                BookshelfChanged="OnBookshelfChanged" />
+        </Grid>
+    </Grid>
+</Page>
