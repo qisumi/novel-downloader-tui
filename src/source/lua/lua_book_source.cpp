@@ -8,6 +8,19 @@ namespace fanqie {
 
 namespace {
 
+constexpr std::string_view k_config_error_prefix = "__fanqie_config_error__:";
+
+[[nodiscard]] bool is_config_error(std::string_view message) {
+    return message.starts_with(k_config_error_prefix);
+}
+
+[[nodiscard]] std::string strip_config_error_prefix(std::string_view message) {
+    if (!is_config_error(message)) {
+        return std::string(message);
+    }
+    return std::string(message.substr(k_config_error_prefix.size()));
+}
+
 template <typename T>
 T cast_or_throw(
     const luabridge::LuaRef& value,
@@ -44,8 +57,12 @@ luabridge::LuaRef call_to_ref(
     Args&&... args) {
     auto result = luabridge::call(fn, std::forward<Args>(args)...);
     if (!result) {
-        throw SourceException({SourceErrorCode::PluginRuntimeError, source_id, plugin_path,
-                               operation, result.errorMessage()});
+        const auto error_message = result.errorMessage();
+        const auto error_code = is_config_error(error_message)
+            ? SourceErrorCode::PluginConfigError
+            : SourceErrorCode::PluginRuntimeError;
+        throw SourceException({error_code, source_id, plugin_path, operation,
+                               strip_config_error_prefix(error_message)});
     }
     return result.size() > 0 ? result[0] : luabridge::LuaRef(fn.state());
 }
@@ -115,8 +132,12 @@ std::vector<Book> LuaBookSource::search(const std::string& keywords, int page) {
             call_to_ref(require_function("search"), info_.id, plugin_path_, "search", keywords, page),
             info_.id);
     } catch (const luabridge::LuaException& e) {
-        throw SourceException({SourceErrorCode::PluginRuntimeError, info_.id, plugin_path_,
-                               "search", e.what()});
+        const auto error_message = std::string(e.what());
+        const auto error_code = is_config_error(error_message)
+            ? SourceErrorCode::PluginConfigError
+            : SourceErrorCode::PluginRuntimeError;
+        throw SourceException({error_code, info_.id, plugin_path_, "search",
+                               strip_config_error_prefix(error_message)});
     }
 }
 
@@ -130,8 +151,12 @@ std::optional<Book> LuaBookSource::get_book_info(const std::string& book_id) {
         return parse_optional_book(
             call_to_ref(fn, info_.id, plugin_path_, "get_book_info", book_id), info_.id);
     } catch (const luabridge::LuaException& e) {
-        throw SourceException({SourceErrorCode::PluginRuntimeError, info_.id, plugin_path_,
-                               "get_book_info", e.what()});
+        const auto error_message = std::string(e.what());
+        const auto error_code = is_config_error(error_message)
+            ? SourceErrorCode::PluginConfigError
+            : SourceErrorCode::PluginRuntimeError;
+        throw SourceException({error_code, info_.id, plugin_path_, "get_book_info",
+                               strip_config_error_prefix(error_message)});
     }
 }
 
@@ -142,8 +167,12 @@ std::vector<TocItem> LuaBookSource::get_toc(const std::string& book_id) {
             call_to_ref(require_function("get_toc"), info_.id, plugin_path_, "get_toc", book_id),
             info_.id);
     } catch (const luabridge::LuaException& e) {
-        throw SourceException({SourceErrorCode::PluginRuntimeError, info_.id, plugin_path_,
-                               "get_toc", e.what()});
+        const auto error_message = std::string(e.what());
+        const auto error_code = is_config_error(error_message)
+            ? SourceErrorCode::PluginConfigError
+            : SourceErrorCode::PluginRuntimeError;
+        throw SourceException({error_code, info_.id, plugin_path_, "get_toc",
+                               strip_config_error_prefix(error_message)});
     }
 }
 
@@ -161,8 +190,12 @@ std::optional<Chapter> LuaBookSource::get_chapter(
         }
         return chapter;
     } catch (const luabridge::LuaException& e) {
-        throw SourceException({SourceErrorCode::PluginRuntimeError, info_.id, plugin_path_,
-                               "get_chapter", e.what()});
+        const auto error_message = std::string(e.what());
+        const auto error_code = is_config_error(error_message)
+            ? SourceErrorCode::PluginConfigError
+            : SourceErrorCode::PluginRuntimeError;
+        throw SourceException({error_code, info_.id, plugin_path_, "get_chapter",
+                               strip_config_error_prefix(error_message)});
     }
 }
 

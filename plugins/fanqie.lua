@@ -50,7 +50,7 @@ local function ensure_api_key()
         ctx.api_key = host.env_get("FANQIE_APIKEY", "") or ""
     end
     if ctx.api_key == "" then
-        error("missing FANQIE_APIKEY; please set it in the environment or .env")
+        host.config_error("missing FANQIE_APIKEY; please set it in the environment or .env")
     end
 end
 

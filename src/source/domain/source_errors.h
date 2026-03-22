@@ -9,6 +9,7 @@ enum class SourceErrorCode {
     PluginLoadFailed,
     PluginInvalidManifest,
     PluginMissingMethod,
+    PluginConfigError,
     PluginRuntimeError,
     InvalidReturnType,
     InvalidReturnField,

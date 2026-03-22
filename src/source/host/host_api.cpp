@@ -14,6 +14,8 @@ namespace fanqie {
 
 namespace {
 
+constexpr const char* k_config_error_prefix = "__fanqie_config_error__:";
+
 HostApi* get_host_api(lua_State* L) {
     lua_getfield(L, LUA_REGISTRYINDEX, "__fanqie_host_api");
     auto* ptr = static_cast<HostApi*>(lua_touserdata(L, -1));
@@ -61,6 +63,11 @@ std::optional<std::string> env_get(
 void log_info(const std::string& message) { spdlog::info("[lua] {}", message); }
 void log_warn(const std::string& message) { spdlog::warn("[lua] {}", message); }
 void log_error(const std::string& message) { spdlog::error("[lua] {}", message); }
+int lua_config_error(lua_State* L) {
+    const char* message = luaL_checkstring(L, 1);
+    spdlog::warn("[lua][config] {}", message);
+    return luaL_error(L, "%s%s", k_config_error_prefix, message);
+}
 
 } // namespace
 
@@ -80,6 +87,7 @@ void HostApi::register_with(lua_State* L) {
             .addFunction("log_info", &log_info)
             .addFunction("log_warn", &log_warn)
             .addFunction("log_error", &log_error)
+            .addFunction("config_error", &lua_config_error)
         .endNamespace();
 }
 

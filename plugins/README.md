@@ -22,6 +22,13 @@
 - `host.json_parse(text)`
 - `host.url_encode(text)`
 - `host.env_get(name[, default])`
+- `host.config_error(message)`
 - `host.log_info(msg)`
 - `host.log_warn(msg)`
 - `host.log_error(msg)`
+
+推荐做法：
+
+- `.env` 由宿主统一加载，插件通过 `host.env_get(...)` 读取配置
+- 配置项是否存在、是否有效由插件自行校验
+- 当配置缺失或非法时，调用 `host.config_error("...")` 生成面向用户的友好错误提示
