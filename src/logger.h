@@ -5,6 +5,7 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace novel {
 

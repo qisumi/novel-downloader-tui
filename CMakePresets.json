@@ -11,6 +11,7 @@
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "NOVEL_ENABLE_WEBVIEW_GUI": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-windows"
       }
     },
