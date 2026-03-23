@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Novel Downloader GUI</title>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">ND</div>
+        <div>
+          <div class="eyebrow">WebView GUI</div>
+          <h1>小说下载器</h1>
+        </div>
+      </div>
+
+      <section class="panel">
+        <label class="label" for="source-select">书源</label>
+        <select id="source-select"></select>
+        <button id="refresh-sources" class="ghost-button" type="button">刷新书源</button>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">书架</div>
+        <div id="bookshelf-list" class="stack compact"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">任务状态</div>
+        <div id="task-feed" class="stack compact"></div>
+      </section>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div>
+          <div class="eyebrow">First Interactive Build</div>
+          <h2>搜索、详情、下载、导出已经接入原生桥接</h2>
+          <p>前端资源支持本地静态文件，也支持通过 `NOVEL_GUI_DEV_SERVER` 接入开发期 dev server。</p>
+        </div>
+        <div class="hero-badge">
+          <span>导出目录</span>
+          <strong id="exports-dir"></strong>
+        </div>
+      </section>
+
+      <section class="card search-card">
+        <form id="search-form" class="search-bar">
+          <input id="search-input" type="search" placeholder="输入书名或作者">
+          <button type="submit">搜索</button>
+        </form>
+        <div id="status-line" class="status-line">准备就绪</div>
+        <div id="search-results" class="results-grid"></div>
+      </section>
+
+      <section class="detail-grid">
+        <section class="card detail-card">
+          <div class="section-head">
+            <h3>书籍详情</h3>
+            <div class="action-row">
+              <button id="save-bookshelf" class="ghost-button" type="button">加入书架</button>
+              <button id="remove-bookshelf" class="ghost-button" type="button">移出书架</button>
+            </div>
+          </div>
+          <div id="book-detail" class="book-detail empty-state">选择一本书查看详情</div>
+        </section>
+
+        <section class="card toc-card">
+          <div class="section-head">
+            <h3>目录与导出</h3>
+            <div class="action-row">
+              <button id="reload-toc" class="ghost-button" type="button">刷新目录</button>
+              <button id="download-book" type="button">下载全部</button>
+            </div>
+          </div>
+
+          <div class="export-bar">
+            <label>起始章节 <input id="export-start" type="number" min="1" value="1"></label>
+            <label>结束章节 <input id="export-end" type="number" min="1" value="1"></label>
+            <select id="export-format">
+              <option value="epub">EPUB</option>
+              <option value="txt">TXT</option>
+            </select>
+            <button id="export-book" type="button">导出</button>
+          </div>
+
+          <div id="toc-summary" class="status-line">暂无目录</div>
+          <div id="toc-list" class="toc-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

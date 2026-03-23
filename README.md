@@ -1,25 +1,23 @@
 # 小说下载工具
 
-基于 Lua 插件书源的小说下载与导出核心，使用 C++20 编写，负责搜索、目录获取、章节缓存与 EPUB/TXT 导出。
-
-当前仓库已经移除旧的 GUI/TUI 代码，现阶段以核心能力整理为主。后续计划使用 C++ 搭配系统 WebView 重建界面层。
+基于 C++20 与 Lua 插件书源的小说搜索、下载、缓存与导出工具。当前界面层为 Windows WebView GUI，核心能力由 C++ 服务层提供，内置 `fanqie` 与 `qimao` 两个书源，支持导出 EPUB / TXT。
 
 ## 当前状态
 
-- 保留内容：书源运行时、应用服务、SQLite 缓存、EPUB/TXT 导出、插件体系
-- 已移除内容：旧 TUI、旧 WinUI GUI
-- 下一步方向：基于现有 C++ 核心接入系统 WebView UI
-- 当前构建：顶层 CMake 已临时收敛为核心静态库 `novel-core`
+- 当前可运行形态：Windows WebView GUI `novel-downloader-gui.exe`
+- 核心能力：搜索、书源切换、目录获取、章节缓存、批量下载、EPUB/TXT 导出
+- 书源机制：运行时从 `plugins/` 加载 Lua 插件
+- 当前构建：顶层 CMake 同时构建核心库 `novel-core` 与 GUI 宿主
 
 ## 核心能力
 
 | 能力 | 说明 |
 |------|------|
 | 搜索 | 通过 Lua 书源按书名或作者搜索 |
-| 书源切换 | 从 `plugins/` 加载并切换 `fanqie`、`qimao` 等书源 |
+| 书源切换 | 加载并切换 `fanqie`、`qimao` 等插件书源 |
 | 目录获取 | 拉取并缓存章节目录 |
 | 章节缓存 | 使用 SQLite 缓存正文 |
-| 批量下载 | 通过应用服务批量抓取章节 |
+| 批量下载 | 按目录批量抓取章节 |
 | 导出 | 导出 EPUB / TXT |
 | 插件扩展 | 可新增 Lua 书源插件 |
 
@@ -31,7 +29,10 @@ fanqie-downloader-tui/
 ├── CMakePresets.json
 ├── README.md
 ├── QUICK_CMD.md
+├── AGENTS.md
 ├── .env.example
+├── cmake/
+│   └── sync_resources.cmake   # GUI 前端/插件资源同步脚本
 ├── plugins/
 │   ├── fanqie.lua
 │   ├── qimao.lua
@@ -43,6 +44,7 @@ fanqie-downloader-tui/
 │   ├── application/           # Library / Download / Export 服务
 │   ├── db/                    # SQLite 持久化
 │   ├── export/                # EPUB / TXT 导出
+│   ├── gui/                   # WebView GUI 宿主、桥接、前端静态资源
 │   ├── models/                # Book / TocItem / Chapter
 │   ├── source/                # 书源接口、Lua 运行时、宿主 API
 │   ├── dotenv.h
@@ -62,9 +64,8 @@ fanqie-downloader-tui/
 
 配置优先级：
 
-1. 命令行参数
-2. 系统环境变量
-3. 项目根目录 `.env`
+1. 系统环境变量
+2. 可执行文件同目录 `.env`
 
 首次使用：
 
@@ -82,33 +83,94 @@ NOVEL_DB=novel.db
 NOVEL_EPUB_DIR=exports
 NOVEL_PLUGIN_DIR=plugins
 NOVEL_SOURCE=fanqie
+NOVEL_GUI_DEV_SERVER=
 ```
 
 说明：
 
-- `FANQIE_APIKEY`、`QIMAO_APIKEY` 是否必填，取决于对应插件的 `manifest.required_envs`
-- `NOVEL_DB`、`NOVEL_EPUB_DIR`、`NOVEL_PLUGIN_DIR`、`NOVEL_SOURCE` 是宿主层通用配置约定
+- `FANQIE_APIKEY`、`QIMAO_APIKEY` 是否必填，以对应插件 `manifest.required_envs` 为准
+- GUI 启动时会优先读取可执行文件同目录 `.env`
+- `NOVEL_GUI_DEV_SERVER` 非空时，GUI 宿主会直接导航到该前端 dev server
 
-## 构建说明
+## 构建与运行
 
-当前顶层 CMake 会构建核心静态库：
+Debug：
 
 ```powershell
 vcpkg install
 cmake --preset windows-x64-debug-msvc
-cmake --build --preset windows-x64-debug-msvc
+cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
+.\build\debug-msvc\bin\Debug\novel-downloader-gui.exe
 ```
 
-当前产物是核心库，不包含可直接启动的 UI 或 CLI 程序入口。这一步的目标是先保持核心代码可持续编译，再为后续 WebView 界面接入预留稳定基础。
+Release：
 
-## WebView 方向
+```powershell
+cmake --preset windows-x64-release-msvc
+cmake --build --preset windows-x64-release-msvc --target novel-downloader-gui
+.\build\release-msvc\bin\Release\novel-downloader-gui.exe
+```
 
-后续 UI 计划：
+静态 Release：
 
-- 保持下载、缓存、导出、插件加载等能力继续由 C++ 核心提供
-- 新界面使用系统 WebView 承载前端
-- 用更清晰的桥接层把搜索、目录、下载、导出能力暴露给 UI
-- 后续会在此基础上增加新的 WebView UI 宿主和桥接层
+```powershell
+cmake --preset windows-x64-release-static-msvc
+cmake --build --preset windows-x64-release-static-msvc --target novel-downloader-gui
+.\build\release-static-msvc\bin\Release\novel-downloader-gui.exe
+```
+
+只构建核心库：
+
+```powershell
+cmake --build --preset windows-x64-debug-msvc --target novel-core
+```
+
+## GUI 资源同步
+
+GUI 依赖两类运行时资源：
+
+- `src/gui/frontend/` 下的前端静态文件
+- `plugins/` 下的 Lua 插件与共享脚本
+
+当前 CMake 会在构建 `novel-downloader-gui` 时自动同步这两类资源到目标输出目录：
+
+- `build/<preset>/bin/<config>/gui`
+- `build/<preset>/bin/<config>/plugins`
+
+同步逻辑会先清理目标目录，再复制最新资源，用来避免旧文件残留导致的“代码已改但运行仍旧异常”。
+
+## 前端开发
+
+如果前端有单独 dev server：
+
+```powershell
+$env:NOVEL_GUI_DEV_SERVER = "http://127.0.0.1:5173"
+.\build\debug-msvc\bin\Debug\novel-downloader-gui.exe
+```
+
+恢复本地静态资源模式：
+
+```powershell
+Remove-Item Env:NOVEL_GUI_DEV_SERVER
+```
+
+## 日志与排错
+
+GUI 日志默认写入项目运行目录下的 `novel-gui.log`。
+
+常见排查点：
+
+- 检查插件目录是否被正确解析
+- 检查 GUI 最终导航到的前端 URL
+- 检查输出目录下 `gui/` 与 `plugins/` 是否为最新文件
+
+快速查看：
+
+```powershell
+Get-Content .\novel-gui.log -Tail 100
+Get-ChildItem .\build\debug-msvc\bin\Debug\gui
+Get-ChildItem .\build\debug-msvc\bin\Debug\plugins
+```
 
 ## 相关文档
 

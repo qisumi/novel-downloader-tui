@@ -113,6 +113,16 @@ set(NOVEL_NATIVE_TARGETS
     novel-core
 )
 
+file(GLOB_RECURSE NOVEL_PLUGIN_RESOURCE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/plugins/*"
+)
+
+if (NOVEL_ENABLE_WEBVIEW_GUI)
+    file(GLOB_RECURSE NOVEL_GUI_FRONTEND_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gui/frontend/*"
+    )
+endif()
+
 foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
     # 静态 triplet 下优先静态链接 MSVC 运行时，便于单文件发布。
     if (MSVC AND IS_STATIC_TRIPLET)
@@ -155,6 +165,10 @@ endforeach()
 if (NOVEL_ENABLE_WEBVIEW_GUI)
     add_executable(novel-downloader-gui WIN32
         src/gui/main.cpp
+        src/gui/app_runtime.cpp
+        src/gui/bridge.cpp
+        src/gui/frontend.cpp
+        src/gui/user_paths.cpp
     )
 
     if (MSVC AND IS_STATIC_TRIPLET)
@@ -174,10 +188,44 @@ if (NOVEL_ENABLE_WEBVIEW_GUI)
     target_link_libraries(novel-downloader-gui PRIVATE
         novel::core
         webview::core
+        nlohmann_json::nlohmann_json
+        SQLiteCpp
+        spdlog::spdlog
+        shell32
     )
+
+    add_custom_target(novel-downloader-gui-resources
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/gui/frontend
+            -DDST=$<TARGET_FILE_DIR:novel-downloader-gui>/gui
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sync_resources.cmake
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/plugins
+            -DDST=$<TARGET_FILE_DIR:novel-downloader-gui>/plugins
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sync_resources.cmake
+        DEPENDS
+            ${NOVEL_GUI_FRONTEND_FILES}
+            ${NOVEL_PLUGIN_RESOURCE_FILES}
+            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sync_resources.cmake
+        COMMENT "Syncing GUI frontend and plugin resources"
+        VERBATIM
+    )
+    add_dependencies(novel-downloader-gui novel-downloader-gui-resources)
+
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.env")
+        add_custom_command(TARGET novel-downloader-gui POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_CURRENT_SOURCE_DIR}/.env
+                $<TARGET_FILE_DIR:novel-downloader-gui>/.env
+        )
+    endif()
 
     install(TARGETS novel-downloader-gui
         RUNTIME DESTINATION bin
+    )
+
+    install(DIRECTORY src/gui/frontend/
+        DESTINATION bin/gui
     )
 endif()
 
@@ -189,3 +237,13 @@ install(TARGETS novel-core
 install(DIRECTORY plugins/
     DESTINATION bin/plugins
 )
+
+if (CMAKE_EXPORT_COMPILE_COMMANDS)
+    add_custom_target(novel-sync-compile-commands
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_BINARY_DIR}/compile_commands.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
+        COMMENT "Syncing compile_commands.json to repository root"
+        VERBATIM
+    )
+endif()

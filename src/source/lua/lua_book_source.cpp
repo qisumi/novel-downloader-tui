@@ -169,9 +169,14 @@ void LuaBookSource::load_manifest() {
                                "manifest", "manifest.id and manifest.name are required"});
     }
 
+    spdlog::info("Parsed plugin manifest. id='{}', name='{}', version='{}', required_envs={}, optional_envs={}",
+                 info_.id, info_.name, info_.version,
+                 info_.required_envs.size(), info_.optional_envs.size());
+
     require_function("search");
     require_function("get_toc");
     require_function("get_chapter");
+    spdlog::debug("Plugin required functions verified: source='{}'", info_.id);
 }
 
 luabridge::LuaRef LuaBookSource::require_function(const char* name) {

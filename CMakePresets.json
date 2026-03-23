@@ -16,6 +16,21 @@
       }
     },
     {
+      "name": "ninja-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
+        "CMAKE_CXX_COMPILER": "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/cl.exe",
+        "CMAKE_MT": "C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/mt.exe",
+        "CMAKE_RC_COMPILER": "C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/rc.exe",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "NOVEL_ENABLE_WEBVIEW_GUI": "ON",
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
       "name": "windows-x64-debug-msvc",
       "displayName": "Windows x64 Debug (MSVC)",
       "inherits": "msvc-base",
@@ -35,6 +50,12 @@
       "cacheVariables": {
         "VCPKG_TARGET_TRIPLET": "x64-windows-static"
       }
+    },
+    {
+      "name": "windows-x64-debug-clangd",
+      "displayName": "Windows x64 Debug (Ninja for clangd)",
+      "inherits": "ninja-base",
+      "binaryDir": "${sourceDir}/build/debug-clangd"
     }
   ],
   "buildPresets": [
@@ -52,6 +73,10 @@
       "name": "windows-x64-release-static-msvc",
       "configurePreset": "windows-x64-release-static-msvc",
       "configuration": "Release"
+    },
+    {
+      "name": "windows-x64-debug-clangd",
+      "configurePreset": "windows-x64-debug-clangd"
     }
   ]
 }

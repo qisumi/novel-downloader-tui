@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <string>
 
+#include <spdlog/spdlog.h>
+
 #include "source/host/host_api.h"
 
 namespace novel {
@@ -27,6 +29,8 @@ void prepend_package_path(lua_State* L, const std::string& plugin_path) {
         plugin_dir + "/?.lua;" +
         plugin_dir + "/?/init.lua;";
     const std::string merged_path = extra_paths + current_path;
+
+    spdlog::debug("Lua package.path prepend for plugin='{}': {}", plugin_path, extra_paths);
 
     lua_pushlstring(L, merged_path.data(), merged_path.size());
     lua_setfield(L, -2, "path");
@@ -53,21 +57,27 @@ LuaRuntime::~LuaRuntime() {
 }
 
 luabridge::LuaRef LuaRuntime::load_plugin(const std::string& plugin_path) {
+    spdlog::info("Lua runtime loading plugin: {}", plugin_path);
     prepend_package_path(state_, plugin_path);
 
     if (luaL_loadfile(state_, plugin_path.c_str()) != LUA_OK) {
         std::string error = lua_tostring(state_, -1);
         lua_pop(state_, 1);
+        spdlog::error("luaL_loadfile failed for {}: {}", plugin_path, error);
         throw std::runtime_error(error);
     }
+    spdlog::debug("luaL_loadfile succeeded for {}", plugin_path);
     if (lua_pcall(state_, 0, 1, 0) != LUA_OK) {
         std::string error = lua_tostring(state_, -1);
         lua_pop(state_, 1);
+        spdlog::error("lua_pcall failed for {}: {}", plugin_path, error);
         throw std::runtime_error(error);
     }
+    spdlog::debug("lua_pcall succeeded for {}", plugin_path);
 
     luabridge::LuaRef plugin = luabridge::LuaRef::fromStack(state_, -1);
     lua_pop(state_, 1);
+    spdlog::info("Lua plugin table returned successfully: {}", plugin_path);
     return plugin;
 }
 
