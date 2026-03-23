@@ -27,7 +27,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         novel::GuiBridge bridge(window, runtime);
 
         window.set_title("Novel Downloader GUI");
-        window.set_size(1320, 900, WEBVIEW_HINT_NONE);
+        window.set_size(1280, 720, WEBVIEW_HINT_NONE);
         bridge.install();
         runtime.navigate_frontend(window);
         window.run();
