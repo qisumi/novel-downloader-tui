@@ -12,27 +12,21 @@ option(NOVEL_ENABLE_WEBVIEW_GUI "Build the Windows WebView GUI host" ON)
 set(NOVEL_WEBVIEW_VERSION "0.12.0" CACHE STRING
     "Pinned webview/webview version used by the GUI host")
 
-set(NOVEL_COMPILER_FAMILY "${CMAKE_CXX_COMPILER_ID}")
-if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(NOVEL_COMPILER_FAMILY "MSVC")
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(NOVEL_COMPILER_FAMILY "Clang")
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(NOVEL_COMPILER_FAMILY "GNU")
+if (NOT WIN32)
+    message(FATAL_ERROR
+        "This project only supports Windows with the MSVC toolchain.")
 endif()
 
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(FATAL_ERROR
-        "This project currently expects the MSVC toolchain on Windows.")
+        "This project only supports the MSVC toolchain.")
 endif()
 
-message(STATUS "Compiler family: ${NOVEL_COMPILER_FAMILY}")
+message(STATUS "Compiler family: MSVC")
 
 include(FetchContent)
 
-if (MSVC)
-    add_compile_options("$<$<COMPILE_LANGUAGE:C>:/utf-8>" "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
-endif()
+add_compile_options("$<$<COMPILE_LANGUAGE:C>:/utf-8>" "$<$<COMPILE_LANGUAGE:CXX>:/utf-8>")
 
 # ── 依赖 ────────────────────────────────────────────────────────────────────
 find_package(nlohmann_json CONFIG REQUIRED)
@@ -125,7 +119,7 @@ endif()
 
 foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
     # 静态 triplet 下优先静态链接 MSVC 运行时，便于单文件发布。
-    if (MSVC AND IS_STATIC_TRIPLET)
+    if (IS_STATIC_TRIPLET)
         set_property(TARGET ${target_name} PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()
@@ -149,17 +143,13 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
         ${LUA_LIBRARIES}
     )
 
-    # Windows 下防止控制台乱码
-    if (WIN32)
-        target_compile_definitions(${target_name} PRIVATE
-            NOMINMAX
-            WIN32_LEAN_AND_MEAN
-            _WIN32_WINNT=0x0A00
-            _CRT_SECURE_NO_WARNINGS
-        )
-        target_link_libraries(${target_name} PRIVATE ws2_32)
-
-    endif()
+    target_compile_definitions(${target_name} PRIVATE
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+        _WIN32_WINNT=0x0A00
+        _CRT_SECURE_NO_WARNINGS
+    )
+    target_link_libraries(${target_name} PRIVATE ws2_32)
 endforeach()
 
 if (NOVEL_ENABLE_WEBVIEW_GUI)
@@ -171,7 +161,7 @@ if (NOVEL_ENABLE_WEBVIEW_GUI)
         src/gui/user_paths.cpp
     )
 
-    if (MSVC AND IS_STATIC_TRIPLET)
+    if (IS_STATIC_TRIPLET)
         set_property(TARGET novel-downloader-gui PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     endif()

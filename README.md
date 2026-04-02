@@ -58,7 +58,8 @@ fanqie-downloader-tui/
 - CMake 3.21+
 - Visual Studio / MSVC
 - `VCPKG_ROOT`
-- vcpkg 清单依赖：`cpp-httplib`、`nlohmann-json`、`SQLiteCpp`、`tinyxml2`、`libzip`、`OpenSSL`、`Lua`、`LuaBridge3`、`CLI11`、`spdlog`
+- vcpkg 依赖声明保留在 `vcpkg.json`
+- 默认 CMake preset 使用 `VCPKG_ROOT` 下的全局安装包（classic mode）
 
 ## 配置
 
@@ -97,11 +98,14 @@ NOVEL_GUI_DEV_SERVER=
 Debug：
 
 ```powershell
-vcpkg install
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
 .\build\debug-msvc\bin\Debug\novel-downloader-gui.exe
 ```
+
+如需临时切回项目清单模式，可在配置时追加 `-DVCPKG_MANIFEST_MODE=ON`。
 
 Release：
 

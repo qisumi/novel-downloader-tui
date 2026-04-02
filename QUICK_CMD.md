@@ -4,9 +4,12 @@
 
 ```powershell
 Copy-Item .env.example .env
-vcpkg install
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
 cmake --list-presets
 ```
+
+默认 preset 已关闭 `manifest mode`，直接使用 `VCPKG_ROOT` 下的全局包；需要回到项目 `vcpkg.json` 时，可在配置时追加 `-DVCPKG_MANIFEST_MODE=ON`。
 
 常用环境变量：
 

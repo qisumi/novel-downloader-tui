@@ -36,7 +36,7 @@
 | Lua + LuaBridge3 | 脚本支持 | `<lua.hpp>`, `<LuaBridge/LuaBridge.h>` |
 | CLI11 | 保留依赖 | `<CLI/CLI.hpp>` |
 | spdlog | 日志 | `<spdlog/spdlog.h>` |
-| VCPKG | 依赖管理 | 清单模式 |
+| VCPKG | 依赖管理 | 默认全局包（保留 `vcpkg.json` 依赖声明） |
 
 ## 目录结构
 
@@ -199,7 +199,8 @@ return {
 ### 常用构建
 
 ```powershell
-vcpkg install
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
 
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
@@ -207,6 +208,8 @@ cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
 cmake --preset windows-x64-release-static-msvc
 cmake --build --preset windows-x64-release-static-msvc --target novel-downloader-gui
 ```
+
+默认 preset 已关闭 `VCPKG_MANIFEST_MODE`，优先使用 `VCPKG_ROOT` 下的全局安装包；如需强制走仓库内 `vcpkg.json`，可在配置时追加 `-DVCPKG_MANIFEST_MODE=ON`。
 
 ### GUI 运行
 
