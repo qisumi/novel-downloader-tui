@@ -6,6 +6,8 @@
 - `qimao.lua`：七猫小说书源示例
 - `_shared/common.lua`：共享 Lua helper，提供请求、JSON、字段兜底等通用能力
 
+## 插件结构
+
 插件需要返回一个 Lua table，并至少包含：
 
 - `manifest`
@@ -15,44 +17,114 @@
 
 可选：
 
-- `configure(ctx)`
+- `configure()`：无参数，由宿主在选择书源后调用，用于校验配置、初始化状态等
 - `get_book_info(book_id)`
 
-`manifest` 推荐包含：
+### manifest
 
-- `id`
-- `name`
-- `version`
-- `author`
-- `description`
-- `required_envs`
-- `optional_envs`
+`manifest` 必须是一个 table，其中：
 
-其中：
+**必需字段：**
 
-- `required_envs`：插件运行必须提供的 `.env` / 环境变量名列表
-- `optional_envs`：插件可选依赖的 `.env` / 环境变量名列表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 书源唯一标识，不可为空，重复 ID 的插件会被跳过 |
+| `name` | string | 书源显示名称，不可为空 |
 
-宿主当前暴露给 Lua 的常用 API：
+**可选字段：**
 
-- `host.http_get(url)`
-- `host.http_request({ method, url, headers?, body?, timeout_seconds? })`
-- `host.json_parse(text)`
-- `host.json_stringify(value)`
-- `host.url_encode(text)`
-- `host.env_get(name[, default])`
-- `host.config_error(message)`
-- `host.log_info(msg)`
-- `host.log_warn(msg)`
-- `host.log_error(msg)`
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `version` | string | `""` | 版本号 |
+| `author` | string | `""` | 作者 |
+| `description` | string | `""` | 描述 |
+| `required_envs` | string[] | `{}` | 插件运行必须提供的 `.env` / 环境变量名列表 |
+| `optional_envs` | string[] | `{}` | 插件可选依赖的 `.env` / 环境变量名列表 |
 
-其中：
+如果 `manifest` 不是 table，或 `id` / `name` 缺失/为空，插件会被拒绝并报 `PluginInvalidManifest` 错误。
 
-- `host.http_get(url)` 适合简单 GET，成功时返回响应 body，失败时返回 `nil, err`
-- `host.http_request(...)` 适合复杂请求，成功时返回 `{ status, body, headers }`
-- `body` 为 Lua table 时，宿主会自动编码为 JSON，并默认使用 `application/json`
+### 返回值结构
 
-示例：
+#### search(keywords, page) → Book[]
+
+返回一个 book table 列表。每个 book table 的字段：
+
+| 字段 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `book_id` | string | **是** | — | 书籍唯一标识 |
+| `title` | string | **是** | — | 书名 |
+| `author` | string | 否 | `""` | 作者 |
+| `cover_url` | string | 否 | `""` | 封面 URL |
+| `abstract` | string | 否 | `""` | 简介 |
+| `category` | string | 否 | `""` | 分类 |
+| `word_count` | string | 否 | `""` | 字数 |
+| `score` | number | 否 | `0.0` | 评分 |
+| `gender` | integer | 否 | `0` | 0=未知, 1=男频, 2=女频 |
+| `creation_status` | integer | 否 | `0` | 0=连载, 1=完结 |
+| `last_chapter_title` | string | 否 | `""` | 最新章节标题 |
+| `last_update_time` | integer | 否 | `0` | Unix 时间戳 |
+
+缺少必需字段会抛出 `InvalidReturnField` 错误。
+
+#### get_book_info(book_id) → Book?
+
+返回结构与 search 相同的单个 book table，或 `nil`。此函数为可选，若插件未定义则宿主返回空。
+
+#### get_toc(book_id) → TocItem[]
+
+返回目录项列表。每个 TocItem 的字段：
+
+| 字段 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `item_id` | string | **是** | — | 章节 ID |
+| `title` | string | **是** | — | 章节标题 |
+| `volume_name` | string | 否 | `""` | 卷名 |
+| `word_count` | integer | 否 | `0` | 字数 |
+| `update_time` | integer | 否 | `0` | Unix 时间戳 |
+
+#### get_chapter(book_id, item_id) → Chapter?
+
+返回章节内容 table，或 `nil`。字段：
+
+| 字段 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `content` | string | **是** | — | 正文内容 |
+| `item_id` | string | 否 | `""` | 章节ID，为空时自动填充调用参数 |
+| `title` | string | 否 | `""` | 章节标题 |
+
+## 宿主 API
+
+宿主暴露给 Lua 的全部 API（`host.*`）：
+
+| API | 说明 |
+|-----|------|
+| `host.http_get(url)` | 简单 GET 请求。仅对 **2xx 状态码**返回 body 字符串；非 2xx 或网络失败返回 `nil, err` |
+| `host.http_request(opts)` | 完整 HTTP 请求，支持 GET/POST/PUT/PATCH/DELETE/HEAD |
+| `host.json_parse(text)` | 解析 JSON 为 Lua 值；失败时直接抛 Lua error（非返回 nil） |
+| `host.json_stringify(value)` | Lua 值序列化为 JSON 字符串；失败时直接抛 Lua error；自动检测循环引用 |
+| `host.url_encode(text)` | URL 编码（RFC 3986，保留 `-_.~`） |
+| `host.env_get(name[, default])` | 读取环境变量，未找到时返回 `default`（默认 `nil`） |
+| `host.config_error(message)` | 报告配置错误，**不会返回**——直接抛 Lua error |
+| `host.log_info(msg)` | 记录 info 级日志 |
+| `host.log_warn(msg)` | 记录 warn 级日志 |
+| `host.log_error(msg)` | 记录 error 级日志 |
+
+### host.http_request(opts) 参数
+
+`opts` 为一个 table，支持以下字段：
+
+| 字段 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `url` | string | **是** | — | 请求 URL |
+| `method` | string | 否 | `"GET"` | HTTP 方法 |
+| `headers` | table | 否 | `{}` | 请求头，string key-value |
+| `body` | string/table | 否 | `nil` | string 直接发送；table 自动编码为 JSON 并设 `Content-Type: application/json` |
+| `timeout_seconds` | integer | 否 | `30` | 超时秒数 |
+
+成功时返回 `{ status = int, body = string, headers = table }`（不限制状态码）。
+失败时返回 `nil, err`。
+
+### 示例
 
 ```lua
 local response, err = host.http_request({
@@ -75,16 +147,9 @@ end
 local data = host.json_parse(response.body)
 ```
 
-推荐做法：
+## 共享模块
 
-- `.env` 由宿主统一加载，插件通过 `host.env_get(...)` 读取配置
-- 配置项是否存在、是否有效由插件自行校验
-- 当配置缺失或非法时，调用 `host.config_error("...")` 生成面向用户的友好错误提示
-- 书源特定的响应展开、字段清洗、结构兼容逻辑放在 Lua 插件内
-- HTTP、JSON、日志、配置读取等通用能力优先由宿主提供
-- 可复用逻辑优先放到 `plugins/_shared/*.lua`，插件内通过 `require("_shared.xxx")` 复用
-
-共享 helper 示例：
+文件名以 `_` 开头的 Lua 文件（如 `_shared/`）不会作为插件加载，但可被其他插件 `require` 引用：
 
 ```lua
 local common = require("_shared.common")
@@ -94,9 +159,30 @@ local title = common.get_string(root.data, "title", "")
 local score = common.get_number(root.data, "score", 0)
 ```
 
-错误分类约定：
+插件加载时会自动将插件目录加入 `package.path`，因此 `require("_shared.xxx")` 可以直接工作。
 
-- `host.config_error(...)` 用于配置缺失、配置非法
-- `host.http_get(...)` / `host.http_request(...)` 的网络失败会被宿主标记为网络错误
-- `host.json_parse(...)` / `host.json_stringify(...)` 的失败会被宿主标记为数据处理错误
-- 这些错误会在 C++ 侧继续补充书源 ID、操作名、插件路径，便于排查
+## 推荐做法
+
+- `.env` 由宿主统一加载，插件通过 `host.env_get(...)` 读取配置
+- 配置项是否存在、是否有效由插件自行校验
+- 当配置缺失或非法时，调用 `host.config_error("...")` 生成面向用户的友好错误提示
+- 书源特定的响应展开、字段清洗、结构兼容逻辑放在 Lua 插件内
+- HTTP、JSON、日志、配置读取等通用能力优先由宿主提供
+- 可复用逻辑优先放到 `plugins/_shared/*.lua`，插件内通过 `require("_shared.xxx")` 复用
+
+## 错误分类
+
+宿主对 Lua 侧错误有如下分类：
+
+| 错误类型 | 触发场景 |
+|----------|----------|
+| `PluginInvalidManifest` | manifest 不是 table、缺少 id/name |
+| `PluginMissingMethod` | 缺少 search / get_toc / get_chapter |
+| `PluginConfigError` | 调用 `host.config_error(...)` |
+| `PluginRequestError` | `host.http_request(...)` 参数非法 |
+| `PluginDataError` | `host.json_parse(...)` / `host.json_stringify(...)` 解析失败 |
+| `NetworkError` | HTTP 请求网络失败 |
+| `PluginRuntimeError` | 其他未分类的 Lua 运行时错误 |
+| `InvalidReturnField` | 返回 table 缺少必需字段或字段类型错误 |
+
+这些错误会在 C++ 侧自动补充书源 ID、操作名、插件路径，便于排查定位。
