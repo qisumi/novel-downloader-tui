@@ -43,6 +43,18 @@ public:
     virtual std::optional<Chapter> get_chapter(
         const std::string& book_id,
         const std::string& item_id) = 0;
+
+    /// 可选：登录当前书源（默认不支持）
+    virtual bool login() { return false; }
+
+    /// 当前书源是否处于已登录状态（默认无登录态）
+    virtual bool is_logged_in() const { return false; }
+
+    /// 可选：获取批量下载总批次数（默认不支持）
+    virtual int get_batch_count(const std::string& book_id) { return 0; }
+
+    /// 可选：按批次获取章节正文（默认不支持）
+    virtual std::vector<Chapter> get_batch(const std::string& book_id, int batch_no) { return {}; }
 };
 
 } // namespace novel

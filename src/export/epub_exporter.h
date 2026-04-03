@@ -18,6 +18,15 @@ struct EpubOptions {
     bool split_by_volume  = false;   ///< 按卷分文件（暂未实现，预留）
     std::string output_dir = ".";    ///< 输出目录
     std::string filename_suffix;      ///< 输出文件名后缀（如 _ch001-010）
+    std::string cover_image_data;     ///< 封面图片二进制数据
+    std::string cover_image_media_type; ///< 封面图片 MIME 类型
+    std::string cover_image_filename = "cover.jpg"; ///< 封面图片在 EPUB 中的文件名
+
+    bool has_cover_image() const {
+        return !cover_image_data.empty()
+            && !cover_image_media_type.empty()
+            && !cover_image_filename.empty();
+    }
 };
 
 /// EPUB 2.0 / 3.0 导出器
@@ -54,7 +63,10 @@ private:
     /// 生成 META-INF/container.xml
     static std::string make_container_xml();
     /// 生成 OEBPS/content.opf（OPF 包文档）
-    static std::string make_opf(const Book& book, const std::vector<Chapter>& chapters);
+    static std::string make_opf(
+        const Book& book,
+        const std::vector<Chapter>& chapters,
+        const EpubOptions& opts);
     /// 生成 OEBPS/toc.ncx（EPUB 2 兼容目录）
     static std::string make_ncx(const Book& book, const std::vector<Chapter>& chapters);
     /// 生成 OEBPS/nav.xhtml（EPUB 3 导航文件）
@@ -62,7 +74,7 @@ private:
     /// 生成 OEBPS/chapter_N.xhtml（章节正文 XHTML）
     static std::string make_chapter_xhtml(const Chapter& ch, int index);
     /// 生成 OEBPS/cover.xhtml（封面页）
-    static std::string make_cover_xhtml(const Book& book);
+    static std::string make_cover_xhtml(const Book& book, const EpubOptions& opts);
     /// 生成 OEBPS/style.css（全局样式表）
     static std::string make_stylesheet();
 };

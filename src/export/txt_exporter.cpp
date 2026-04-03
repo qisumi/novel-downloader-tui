@@ -8,15 +8,20 @@
 
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 
 namespace fs = std::filesystem;
 
 namespace novel {
 
-/// 将 std::string 转换为 std::u8string，用于 filesystem 路径操作
-static std::u8string to_u8string(const std::string& s) {
-    return std::u8string(reinterpret_cast<const char8_t*>(s.data()),
-                         reinterpret_cast<const char8_t*>(s.data()) + s.size());
+static fs::path path_from_utf8(std::string_view value) {
+    return fs::path(std::u8string(reinterpret_cast<const char8_t*>(value.data()),
+                                  reinterpret_cast<const char8_t*>(value.data()) + value.size()));
+}
+
+static std::string path_to_utf8(const fs::path& path) {
+    const auto utf8 = path.u8string();
+    return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
 }
 
 std::string TxtExporter::export_book(const Book& book,
@@ -24,13 +29,13 @@ std::string TxtExporter::export_book(const Book& book,
                                      const TxtOptions& opts,
                                      std::function<void(int, int)> progress_cb) {
     // 创建输出目录
-    fs::path output_dir = fs::path(to_u8string(opts.output_dir));
+    fs::path output_dir = path_from_utf8(opts.output_dir);
     fs::create_directories(output_dir);
 
     // 替换文件名中的非法字符，拼接后缀
     std::string safe_title = text_sanitizer::sanitize_filename(book.title);
     fs::path out_path = output_dir /
-                        fs::path(to_u8string(safe_title + opts.filename_suffix + ".txt"));
+                        path_from_utf8(safe_title + opts.filename_suffix + ".txt");
 
     // 以二进制模式打开文件，避免 Windows 自动转换换行符
     std::ofstream out(out_path, std::ios::binary);
@@ -60,8 +65,7 @@ std::string TxtExporter::export_book(const Book& book,
     if (!out.good()) return {};
 
     // 返回绝对路径
-    auto abs_u8 = fs::absolute(out_path).u8string();
-    return std::string(abs_u8.begin(), abs_u8.end());
+    return path_to_utf8(fs::absolute(out_path));
 }
 
 } // namespace novel

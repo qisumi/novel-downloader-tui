@@ -22,6 +22,8 @@ struct SourceCapabilities {
     bool supports_book_info = true;   ///< 是否支持获取书籍详情
     bool supports_toc = true;         ///< 是否支持获取目录
     bool supports_chapter = true;     ///< 是否支持获取章节正文
+    bool supports_batch = false;      ///< 是否支持批量下载
+    bool supports_login = false;      ///< 是否支持登录
 };
 
 } // namespace novel

@@ -1,9 +1,16 @@
 const common = require("_shared/common");
+const rainBatch = require("_shared/rain_batch");
 
 const API_URL = "http://v3.rain.ink/fanqie/";
+const WEB_BASE_URL = "https://v3.rain.ink";
+const LOGIN_URL = `${WEB_BASE_URL}/web/index.php`;
+const INVALID_KEY_MARKER = "无效的API密钥";
+const USER_RE = /const user = (\{.*?\});/s;
 
 const ctx = {
   api_key: "",
+  logged_in: false,
+  user_info: null,
 };
 
 const parseBook = (data) => ({
@@ -37,11 +44,57 @@ const buildUrl = async (typeId, params) => {
   return common.appendQuery(API_URL, query);
 };
 
+const parseUserInfo = (html) => {
+  const match = String(html || "").match(USER_RE);
+  if (!match) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(match[1]);
+  } catch (_error) {
+    return {};
+  }
+};
+
+const getAuthMarkers = (html) => {
+  const text = String(html || "");
+  return {
+    invalidKey: text.includes(INVALID_KEY_MARKER),
+    logout: text.includes("?logout=1"),
+    user: text.includes("const user ="),
+    keyword: text.includes('name="keyword"'),
+    download: text.includes("downloadBtn"),
+  };
+};
+
+const isAuthenticatedHtml = (markers) =>
+  markers.user || (markers.logout && (markers.keyword || markers.download));
+
+const assertAuthenticatedHtml = (html) => {
+  const markers = getAuthMarkers(html);
+  const text = String(html || "");
+  if (text.includes(INVALID_KEY_MARKER)) {
+    ctx.logged_in = false;
+    host.config_error("番茄书源登录失败：API Key 无效");
+  }
+
+  if (!isAuthenticatedHtml(markers)) {
+    throw new Error("__novel_data_error__:fanqie login did not return authenticated html");
+  }
+};
+
+const requireLoggedIn = () => {
+  if (!ctx.logged_in) {
+    host.config_error("当前番茄书源尚未登录；请先登录后再启用批量下载");
+  }
+};
+
 module.exports = {
   manifest: {
     id: "fanqie",
     name: "番茄小说",
-    version: "1.1.0",
+    version: "1.3.2",
     author: "novel-downloader-tui",
     description: "默认番茄小说书源插件，会自行从环境变量或 .env 中读取 FANQIE_APIKEY",
     required_envs: ["FANQIE_APIKEY"],
@@ -50,6 +103,60 @@ module.exports = {
 
   async configure() {
     ctx.api_key = await common.requireEnv("FANQIE_APIKEY");
+    ctx.logged_in = false;
+    ctx.user_info = null;
+  },
+
+  async login() {
+    const apiKey = await ensureApiKey();
+    const response = await common.postForm(
+      LOGIN_URL,
+      { apikey: apiKey },
+      {},
+      30,
+      false,
+    );
+
+    if (response.status >= 400) {
+      throw new Error(`login request failed with status ${response.status}`);
+    }
+    if (String(response.body || "").includes(INVALID_KEY_MARKER)) {
+      ctx.logged_in = false;
+      host.config_error("番茄书源登录失败：API Key 无效");
+    }
+
+    await host.log_info(`fanqie login post status=${response.status}`);
+    const verifyResponse = await host.http_request({
+      method: "GET",
+      url: LOGIN_URL,
+      timeout_seconds: 30,
+    });
+    await host.log_info(`fanqie login verify status=${verifyResponse.status}`);
+    const html = String(verifyResponse.body || "");
+    const markers = getAuthMarkers(html);
+    await host.log_info(
+      `fanqie login markers logout=${markers.logout} user=${markers.user} keyword=${markers.keyword} download=${markers.download} invalid=${markers.invalidKey}`,
+    );
+    assertAuthenticatedHtml(html);
+
+    // Rain Web 当前会先下发 server_name_session，再在验证页分配 PHPSESSID。
+    // 对 batch.php 来说，仅有验证页生成的 PHPSESSID 还不够；需要再用现有 cookie
+    // 补一次 apikey POST，才能把下载能力绑定到当前 PHP session。
+    const bindResponse = await common.postForm(
+      LOGIN_URL,
+      { apikey: apiKey },
+      {},
+      30,
+      false,
+    );
+    await host.log_info(`fanqie login bind status=${bindResponse.status}`);
+    if (bindResponse.status >= 400) {
+      throw new Error(`login bind request failed with status ${bindResponse.status}`);
+    }
+
+    ctx.user_info = parseUserInfo(html);
+    ctx.logged_in = true;
+    return true;
   },
 
   async search(keywords, page) {
@@ -128,5 +235,15 @@ module.exports = {
       title: "",
       content: String(root.data.content),
     };
+  },
+
+  async get_batch_count(bookId) {
+    requireLoggedIn();
+    return rainBatch.getBatchCount(WEB_BASE_URL, bookId);
+  },
+
+  async get_batch(bookId, batchNo) {
+    requireLoggedIn();
+    return rainBatch.getBatch(WEB_BASE_URL, bookId, batchNo);
   },
 };

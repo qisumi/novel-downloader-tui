@@ -31,10 +31,13 @@ struct JsBootstrapPlugin {
     std::string    plugin_path;     ///< 文件绝对路径
     nlohmann::json manifest;        ///< 插件 manifest 对象
     bool           has_configure = false;  ///< 是否导出 configure 方法
+    bool           has_login = false;      ///< 是否导出 login 方法
     bool           has_search = false;     ///< 是否导出 search 方法
     bool           has_book_info = false;  ///< 是否导出 get_book_info 方法
     bool           has_toc = false;        ///< 是否导出 get_toc 方法
     bool           has_chapter = false;    ///< 是否导出 get_chapter 方法
+    bool           has_batch_count = false; ///< 是否导出 get_batch_count 方法
+    bool           has_batch = false;       ///< 是否导出 get_batch 方法
 };
 
 /// JS 插件运行时，在 WebView 中管理 JS 模块的注册、加载和调用

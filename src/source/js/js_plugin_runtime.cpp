@@ -34,7 +34,7 @@ std::string require_string_arg(const json& args, std::size_t index, const char* 
 }
 
 /// 从 JSON 对象构造 HttpRequest 结构体，校验字段类型
-/// 支持解析 method、url、headers、body、timeout_seconds 字段
+/// 支持解析 method、url、headers、body、timeout_seconds、follow_redirects 字段
 HttpRequest request_from_json(const json& payload) {
     if (!payload.is_object()) {
         throw std::runtime_error(prefix_source_error(
@@ -68,6 +68,15 @@ HttpRequest request_from_json(const json& payload) {
                 "http_request timeout_seconds must be an integer"));
         }
         request.timeout_seconds = payload["timeout_seconds"].get<int>();
+    }
+
+    if (payload.contains("follow_redirects") && !payload["follow_redirects"].is_null()) {
+        if (!payload["follow_redirects"].is_boolean()) {
+            throw std::runtime_error(prefix_source_error(
+                SourceErrorCode::PluginRequestError,
+                "http_request follow_redirects must be a boolean"));
+        }
+        request.follow_redirects = payload["follow_redirects"].get<bool>();
     }
 
     // 解析可选的请求头，值支持字符串/整数/浮点/布尔类型
@@ -452,10 +461,13 @@ void JsPluginRuntime::install() {
                         plugin.plugin_path = item.value("plugin_path", "");
                         plugin.manifest = item.value("manifest", json(nullptr));
                         plugin.has_configure = item.value("has_configure", false);
+                        plugin.has_login = item.value("has_login", false);
                         plugin.has_search = item.value("has_search", false);
                         plugin.has_book_info = item.value("has_book_info", false);
                         plugin.has_toc = item.value("has_toc", false);
                         plugin.has_chapter = item.value("has_chapter", false);
+                        plugin.has_batch_count = item.value("has_batch_count", false);
+                        plugin.has_batch = item.value("has_batch", false);
                         bootstrap_plugins_.push_back(std::move(plugin));
                     }
                 }
@@ -514,10 +526,13 @@ void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
         "          plugin_path: candidate.plugin_path,"
         "          manifest: plugin && typeof plugin === 'object' ? (plugin.manifest ?? null) : null,"
         "          has_configure: !!(plugin && typeof plugin.configure === 'function'),"
+        "          has_login: !!(plugin && typeof plugin.login === 'function'),"
         "          has_search: !!(plugin && typeof plugin.search === 'function'),"
         "          has_book_info: !!(plugin && typeof plugin.get_book_info === 'function'),"
         "          has_toc: !!(plugin && typeof plugin.get_toc === 'function'),"
-        "          has_chapter: !!(plugin && typeof plugin.get_chapter === 'function')"
+        "          has_chapter: !!(plugin && typeof plugin.get_chapter === 'function'),"
+        "          has_batch_count: !!(plugin && typeof plugin.get_batch_count === 'function'),"
+        "          has_batch: !!(plugin && typeof plugin.get_batch === 'function')"
         "        });"
         "      } catch (error) {"
         "        errors.push({"

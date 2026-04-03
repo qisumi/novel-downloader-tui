@@ -70,6 +70,7 @@ static std::filesystem::path first_existing_path(const std::vector<std::filesyst
 ///   - 前端目录：依次查找工作目录 src/gui/frontend/、gui/、exe 同级 gui/
 ///   - 数据库文件：exe 同级 novel.db
 ///   - 日志文件：工作目录下 novel-gui.log
+///   - 导出目录：工作目录（与程序运行目录保持一致）
 GuiPaths resolve_gui_paths()
 {
     namespace fs = std::filesystem;
@@ -80,7 +81,7 @@ GuiPaths resolve_gui_paths()
     paths.app_root = local_app_data() / "NovelDownloader";
     paths.logs_dir = paths.app_root / "logs";
     paths.data_dir = paths.app_root / "data";
-    paths.exports_dir = paths.app_root / "exports";
+    paths.exports_dir = paths.run_dir;
     paths.webview_dir = paths.app_root / "webview";
     paths.db_path = paths.executable_dir / "novel.db";
     paths.log_path = paths.run_dir / "novel-gui.log";

@@ -18,6 +18,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <stdexcept>
+#include <string_view>
 #include <chrono>
 #include <iomanip>
 #include <cctype>
@@ -30,6 +31,42 @@ namespace novel {
 // ──────────────────────────────────────────────────────────────────────────────
 // 辅助工具函数
 // ──────────────────────────────────────────────────────────────────────────────
+
+static fs::path path_from_utf8(std::string_view value) {
+    return fs::path(std::u8string(reinterpret_cast<const char8_t*>(value.data()),
+                                  reinterpret_cast<const char8_t*>(value.data()) + value.size()));
+}
+
+static std::string path_to_utf8(const fs::path& path) {
+    const auto utf8 = path.u8string();
+    return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+}
+
+static zip_t* open_zip_archive(const fs::path& out_path) {
+#ifdef _WIN32
+    zip_error_t error;
+    zip_error_init(&error);
+
+    zip_source_t* source = zip_source_win32w_create(out_path.c_str(), 0, -1, &error);
+    if (!source) {
+        zip_error_fini(&error);
+        return nullptr;
+    }
+
+    zip_t* archive = zip_open_from_source(source, ZIP_CREATE | ZIP_TRUNCATE, &error);
+    if (!archive) {
+        zip_source_free(source);
+        zip_error_fini(&error);
+        return nullptr;
+    }
+
+    zip_error_fini(&error);
+    return archive;
+#else
+    int err = 0;
+    return zip_open(out_path.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, &err);
+#endif
+}
 
 /// XML 属性值转义：将 & < > " ' 替换为对应实体
 static std::string xml_escape(const std::string& s) {
@@ -171,6 +208,18 @@ static bool zip_add_str(zip_t* za,
     return true;
 }
 
+static bool zip_add_blob(zip_t* za,
+                         const std::string& path,
+                         const std::string& content) {
+    zip_source_t* src = zip_source_from_string_copy(za, content);
+    if (!src) return false;
+    if (zip_file_add(za, path.c_str(), src, ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8) < 0) {
+        zip_source_free(src);
+        return false;
+    }
+    return true;
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // mimetype（必须是 EPUB 首个文件，且不压缩）
 // ──────────────────────────────────────────────────────────────────────────────
@@ -198,7 +247,8 @@ std::string EpubExporter::make_container_xml() {
 // 声明所有资源（manifest）和阅读顺序（spine），包含元数据（标题、作者、语言等）
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_opf(const Book& book,
-                                   const std::vector<Chapter>& chapters) {
+                                   const std::vector<Chapter>& chapters,
+                                   const EpubOptions& opts) {
     const auto clean_title = clean_inline_text(book.title);
     const auto clean_author = clean_inline_text(book.author);
     const auto clean_abstract = clean_inline_text(book.abstract);
@@ -214,7 +264,12 @@ std::string EpubExporter::make_opf(const Book& book,
     <dc:language>zh-CN</dc:language>
     <dc:date>)" << today_iso() << R"(</dc:date>
     <dc:description>)" << xml_escape(clean_abstract) << R"(</dc:description>
-    <meta property="dcterms:modified">)" << today_iso() << R"(T00:00:00Z</meta>
+)";
+    if (opts.has_cover_image()) {
+        s << R"(    <meta name="cover" content="cover-image"/>
+)";
+    }
+    s << R"(    <meta property="dcterms:modified">)" << today_iso() << R"(T00:00:00Z</meta>
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
@@ -222,6 +277,13 @@ std::string EpubExporter::make_opf(const Book& book,
     <item id="css" href="style.css"  media-type="text/css"/>
     <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
 )";
+    if (opts.has_cover_image()) {
+        s << "    <item id=\"cover-image\" href=\""
+          << xml_escape(opts.cover_image_filename)
+          << "\" media-type=\""
+          << xml_escape(opts.cover_image_media_type)
+          << "\" properties=\"cover-image\"/>\n";
+    }
     // 在 manifest 中声明每个章节文件
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
         s << "    <item id=\"ch" << i << "\" href=\"chapter_" << i
@@ -230,8 +292,10 @@ std::string EpubExporter::make_opf(const Book& book,
     s << R"(  </manifest>
   <spine toc="ncx">
     <itemref idref="cover"/>
-    <itemref idref="nav"/>
 )";
+    if (opts.include_toc_page) {
+        s << "    <itemref idref=\"nav\"/>\n";
+    }
     // 在 spine 中按顺序列出每个章节
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
         s << "    <itemref idref=\"ch" << i << "\"/>\n";
@@ -338,10 +402,13 @@ std::string EpubExporter::make_chapter_xhtml(const Chapter& ch, int /*index*/) {
 //
 // 显示书名、作者和简介，作为 EPUB 打开后的第一页
 // ──────────────────────────────────────────────────────────────────────────────
-std::string EpubExporter::make_cover_xhtml(const Book& book) {
+std::string EpubExporter::make_cover_xhtml(const Book& book, const EpubOptions& opts) {
     const auto clean_title = clean_inline_text(book.title);
     const auto clean_author = clean_inline_text(book.author);
     const auto clean_abstract = clean_inline_text(book.abstract);
+    const auto cover_markup = opts.has_cover_image()
+        ? R"(<div class="cover-art"><img src=")" + xml_escape(opts.cover_image_filename) + R"(" alt="封面"/></div>)"
+        : std::string{};
     return R"(<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="zh-CN">
@@ -350,6 +417,7 @@ std::string EpubExporter::make_cover_xhtml(const Book& book) {
 </head>
 <body class="cover-page">
 <div class="cover-box">
+)" + cover_markup + R"(
     <h1 class="book-title">)" + xml_escape(clean_title) + R"(</h1>
     <p class="book-author">)" + xml_escape(clean_author) + R"(</p>
     <p class="book-abstract">)" + xml_escape(clean_abstract) + R"(</p>
@@ -375,6 +443,8 @@ std::string EpubExporter::make_stylesheet() {
 h1, h2 { color: #333; }
 p { text-indent: 2em; margin: 0.4em 0; }
 .cover-page { text-align: center; padding-top: 20%; }
+.cover-art { margin: 0 auto 2em; max-width: 20em; }
+.cover-art img { display: block; width: 100%; height: auto; border-radius: 0.5em; box-shadow: 0 1em 2em rgba(0, 0, 0, 0.18); }
 .book-title  { font-size: 2em; }
 .book-author { font-size: 1.2em; color: #666; }
 .book-abstract { font-size: 0.9em; color: #888; margin-top: 2em; max-width: 36em; display: inline-block; text-align: left; }
@@ -395,16 +465,16 @@ std::string EpubExporter::export_book(const Book& book,
                                       const EpubOptions& opts,
                                       std::function<void(int, int)> progress_cb) {
     // 确保输出目录存在
-    fs::create_directories(opts.output_dir);
+    fs::path output_dir = path_from_utf8(opts.output_dir);
+    fs::create_directories(output_dir);
 
     // 构建输出路径（非法字符替换）
     std::string safe_title = text_sanitizer::sanitize_filename(book.title);
-    fs::path out_path = fs::path(opts.output_dir) /
-                        (safe_title + opts.filename_suffix + ".epub");
+    fs::path out_path = output_dir /
+                        path_from_utf8(safe_title + opts.filename_suffix + ".epub");
 
     // 创建 ZIP 归档（如果已存在则覆盖）
-    int err = 0;
-    zip_t* za = zip_open(out_path.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, &err);
+    zip_t* za = open_zip_archive(out_path);
     if (!za) return {};
 
     // ── mimetype（必须第一个，不压缩）──────────────────────────
@@ -437,11 +507,16 @@ std::string EpubExporter::export_book(const Book& book,
 
     // ── OEBPS/ ───────────────────────────────────────────────
     // 写入元数据文件：OPF 包文档、NCX 目录、EPUB3 导航、封面页、样式表
-    if (!zip_add_str(za, "OEBPS/content.opf", make_opf(book, chapters)) ||
+    if (!zip_add_str(za, "OEBPS/content.opf", make_opf(book, chapters, opts)) ||
         !zip_add_str(za, "OEBPS/toc.ncx",     make_ncx(book, chapters)) ||
         !zip_add_str(za, "OEBPS/nav.xhtml",   make_nav_xhtml(book, chapters)) ||
-        !zip_add_str(za, "OEBPS/cover.xhtml", make_cover_xhtml(book)) ||
+        !zip_add_str(za, "OEBPS/cover.xhtml", make_cover_xhtml(book, opts)) ||
         !zip_add_str(za, "OEBPS/style.css",   make_stylesheet())) {
+        zip_discard(za);
+        return {};
+    }
+    if (opts.has_cover_image()
+        && !zip_add_blob(za, "OEBPS/" + opts.cover_image_filename, opts.cover_image_data)) {
         zip_discard(za);
         return {};
     }
@@ -462,7 +537,7 @@ std::string EpubExporter::export_book(const Book& book,
         zip_discard(za);
         return {};
     }
-    return fs::absolute(out_path).string();
+    return path_to_utf8(fs::absolute(out_path));
 }
 
 } // namespace novel

@@ -349,8 +349,14 @@ JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBoo
       module_id_(plugin.module_id),
       runtime_(std::move(runtime)),
       has_configure_(plugin.has_configure),
-      has_book_info_(plugin.has_book_info) {
+      has_login_(plugin.has_login),
+      has_book_info_(plugin.has_book_info),
+      has_batch_count_(plugin.has_batch_count),
+      has_batch_(plugin.has_batch) {
     load_manifest(plugin.manifest);
+    capabilities_.supports_book_info = has_book_info_;
+    capabilities_.supports_batch = has_batch_count_ && has_batch_;
+    capabilities_.supports_login = has_login_;
 
     // 校验插件是否导出了必需的方法
     if (!plugin.has_search) {
@@ -394,6 +400,29 @@ void JsBookSource::configure() {
         runtime_->call(module_id_, "configure", json::array());
         return 0;
     });
+}
+
+/// 调用 JS 插件的 login 方法（若插件实现了该方法）
+bool JsBookSource::login() {
+    if (!has_login_) {
+        return false;
+    }
+
+    logged_in_ = false;
+    logged_in_ = invoke_with_error_context(info_.id, plugin_path_, "login", [&] {
+        const auto result = runtime_->call(module_id_, "login", json::array());
+        if (!result.is_boolean()) {
+            throw SourceException({
+                SourceErrorCode::InvalidReturnType,
+                info_.id,
+                plugin_path_,
+                "login",
+                "expected boolean",
+            });
+        }
+        return result.get<bool>();
+    });
+    return logged_in_;
 }
 
 /// 调用 JS 插件的 search 方法，解析返回的书籍数组
@@ -467,6 +496,48 @@ std::optional<Chapter> JsBookSource::get_chapter(
             return std::nullopt;
         }
         return parse_chapter(result, info_.id, plugin_path_);
+    });
+}
+
+/// 调用 JS 插件的 get_batch_count 方法，返回总批次数
+int JsBookSource::get_batch_count(const std::string& book_id) {
+    if (!has_batch_count_) {
+        return 0;
+    }
+
+    return invoke_with_error_context(info_.id, plugin_path_, "get_batch_count", [&] {
+        const auto result = runtime_->call(module_id_, "get_batch_count", json::array({book_id}));
+        return integer_from_value<int>(result, info_.id, plugin_path_, "get_batch_count", 0);
+    });
+}
+
+/// 调用 JS 插件的 get_batch 方法，返回指定批次的章节列表
+std::vector<Chapter> JsBookSource::get_batch(const std::string& book_id, int batch_no) {
+    if (!has_batch_) {
+        return {};
+    }
+
+    return invoke_with_error_context(info_.id, plugin_path_, "get_batch", [&] {
+        const auto result = runtime_->call(module_id_, "get_batch", json::array({book_id, batch_no}));
+        if (result.is_null()) {
+            return std::vector<Chapter>{};
+        }
+        if (!result.is_array()) {
+            throw SourceException({
+                SourceErrorCode::InvalidReturnType,
+                info_.id,
+                plugin_path_,
+                "get_batch",
+                "expected array",
+            });
+        }
+
+        std::vector<Chapter> chapters;
+        chapters.reserve(result.size());
+        for (const auto& item : result) {
+            chapters.push_back(parse_chapter(item, info_.id, plugin_path_));
+        }
+        return chapters;
     });
 }
 

@@ -6,6 +6,7 @@
 
 #include "gui/bridge.h"
 
+#include <filesystem>
 #include <sstream>
 #include <string_view>
 #include <thread>
@@ -17,6 +18,12 @@ namespace novel {
 namespace {
 
 using json = nlohmann::json;
+
+std::string path_to_utf8(const std::filesystem::path& path)
+{
+    const auto utf8 = path.u8string();
+    return std::string(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+}
 
 /// 将 SourceInfo 转换为 JSON 对象
 json source_to_json(const SourceInfo& source, bool selected)
@@ -30,6 +37,23 @@ json source_to_json(const SourceInfo& source, bool selected)
         {"required_envs", source.required_envs},
         {"optional_envs", source.optional_envs},
         {"selected", selected},
+    };
+}
+
+/// 将当前书源能力和登录态转换为 JSON 对象
+json capabilities_to_json(const IBookSource& source)
+{
+    const auto& capabilities = source.capabilities();
+    const bool logged_in = source.is_logged_in();
+    return {
+        {"supports_search", capabilities.supports_search},
+        {"supports_book_info", capabilities.supports_book_info},
+        {"supports_toc", capabilities.supports_toc},
+        {"supports_chapter", capabilities.supports_chapter},
+        {"supports_batch", capabilities.supports_batch},
+        {"supports_login", capabilities.supports_login},
+        {"logged_in", logged_in},
+        {"batch_enabled", capabilities.supports_batch && (!capabilities.supports_login || logged_in)},
     };
 }
 
@@ -116,6 +140,8 @@ window.app = {
   search_books: (...args) => window.__NOVEL_BRIDGE__.wrap("native_search_books")(...args),
   get_book_detail: (...args) => window.__NOVEL_BRIDGE__.wrap("native_get_book_detail")(...args),
   get_toc: (...args) => window.__NOVEL_BRIDGE__.wrap("native_get_toc")(...args),
+  login: (...args) => window.__NOVEL_BRIDGE__.wrap("native_login")(...args),
+  getSourceCapabilities: (...args) => window.__NOVEL_BRIDGE__.wrap("native_get_source_capabilities")(...args),
   download_book: (...args) => window.__NOVEL_BRIDGE__.wrap("native_download_book")(...args),
   export_book: (...args) => window.__NOVEL_BRIDGE__.wrap("native_export_book")(...args),
   list_bookshelf: (...args) => window.__NOVEL_BRIDGE__.wrap("native_list_bookshelf")(...args),
@@ -224,6 +250,28 @@ window.app = {
         });
     });
 
+    // ── 当前书源登录（可选） ────────────────────────────────────
+    bind_async("native_login", [&](const json&) {
+        std::scoped_lock lock(core_mutex_);
+        auto source = runtime_.source_manager()->current_source();
+        const bool logged_in = source->login();
+        return make_success({
+            {"source_id", source->info().id},
+            {"logged_in", logged_in},
+            {"batch_enabled", source->capabilities().supports_batch
+                                  && (!source->capabilities().supports_login || logged_in)},
+        });
+    });
+
+    // ── 获取当前书源能力 ────────────────────────────────────────
+    bind_async("native_get_source_capabilities", [&](const json&) {
+        std::scoped_lock lock(core_mutex_);
+        auto source = runtime_.source_manager()->current_source();
+        auto payload = capabilities_to_json(*source);
+        payload["source_id"] = source->info().id;
+        return make_success(std::move(payload));
+    });
+
     // ── 下载书籍 ────────────────────────────────────────────────
     // 通过事件推送下载进度（started / progress / finished）
     bind_async("native_download_book", [&](const json& args) {
@@ -244,9 +292,15 @@ window.app = {
             {"stage", "started"},
             {"book_id", book.book_id},
             {"title", book.title},
+            {"cover_url", book.cover_url},
         });
 
         std::scoped_lock lock(core_mutex_);
+        const auto source = runtime_.source_manager()->current_source();
+        const auto progress_stage = (source->capabilities().supports_batch
+                                     && (!source->capabilities().supports_login || source->is_logged_in()))
+                                        ? "batch_progress"
+                                        : "chapter_progress";
         const auto toc = runtime_.library_service()->load_toc(book, false);
         runtime_.download_service()->download_book(
             book, toc,
@@ -254,8 +308,10 @@ window.app = {
                 emit_event("task", {
                     {"task_id", task_id},
                     {"kind", "download"},
-                    {"stage", "progress"},
+                    {"stage", progress_stage},
                     {"book_id", book.book_id},
+                    {"title", book.title},
+                    {"cover_url", book.cover_url},
                     {"current", current},
                     {"total", total},
                 });
@@ -266,6 +322,8 @@ window.app = {
             {"kind", "download"},
             {"stage", "finished"},
             {"book_id", book.book_id},
+            {"title", book.title},
+            {"cover_url", book.cover_url},
             {"total", static_cast<int>(toc.size())},
         });
 
@@ -303,23 +361,30 @@ window.app = {
             {"kind", "export"},
             {"stage", "started"},
             {"book_id", book.book_id},
+            {"title", book.title},
+            {"cover_url", book.cover_url},
             {"format", format},
         });
 
         std::scoped_lock lock(core_mutex_);
         const auto toc = runtime_.library_service()->load_toc(book, false);
+        const auto exports_dir = runtime_.paths().exports_dir;
         const auto output_path = runtime_.export_service()->export_book(
             book,
             toc,
             start,
             end,
             as_epub,
-            runtime_.paths().exports_dir.string(),
+            path_to_utf8(exports_dir),
             [&](int current, int total) {
                 emit_event("task", {
                     {"task_id", task_id},
                     {"kind", "export"},
                     {"stage", "prepare"},
+                    {"book_id", book.book_id},
+                    {"title", book.title},
+                    {"cover_url", book.cover_url},
+                    {"format", format},
                     {"current", current},
                     {"total", total},
                 });
@@ -329,6 +394,10 @@ window.app = {
                     {"task_id", task_id},
                     {"kind", "export"},
                     {"stage", "write"},
+                    {"book_id", book.book_id},
+                    {"title", book.title},
+                    {"cover_url", book.cover_url},
+                    {"format", format},
                     {"current", current},
                     {"total", total},
                 });
@@ -338,6 +407,9 @@ window.app = {
             {"task_id", task_id},
             {"kind", "export"},
             {"stage", "finished"},
+            {"book_id", book.book_id},
+            {"title", book.title},
+            {"cover_url", book.cover_url},
             {"path", output_path},
             {"format", format},
         });
@@ -345,7 +417,7 @@ window.app = {
         return make_success({
             {"task_id", task_id},
             {"path", output_path},
-            {"exports_dir", runtime_.paths().exports_dir.string()},
+            {"exports_dir", path_to_utf8(exports_dir)},
         });
     });
 
@@ -422,13 +494,19 @@ void GuiBridge::bind_async(
 /// 向 JS 端返回成功结果（resolve code = 0）
 void GuiBridge::resolve_success(const std::string& call_id, json payload)
 {
-    window_.resolve(call_id, 0, payload.dump());
+    const auto raw_payload = payload.dump();
+    window_.dispatch([this, call_id, raw_payload] {
+        window_.resolve(call_id, 0, raw_payload);
+    });
 }
 
 /// 向 JS 端返回错误结果（resolve code = 1）
 void GuiBridge::resolve_error(const std::string& call_id, const json& payload)
 {
-    window_.resolve(call_id, 1, payload.dump());
+    const auto raw_payload = payload.dump();
+    window_.dispatch([this, call_id, raw_payload] {
+        window_.resolve(call_id, 1, raw_payload);
+    });
 }
 
 /// 向前端派发自定义事件
@@ -439,7 +517,9 @@ void GuiBridge::emit_event(const std::string& name, const json& payload)
     std::string script =
         "window.dispatchEvent(new CustomEvent(" + json("novel:" + name).dump() +
         ", { detail: " + payload.dump() + " }));";
-    window_.eval(script);
+    window_.dispatch([this, script = std::move(script)] {
+        window_.eval(script);
+    });
 }
 
 /// 解析 JS 端传入的参数字符串为 JSON 数组

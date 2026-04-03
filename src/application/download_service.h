@@ -9,6 +9,7 @@
 namespace novel {
 
 class LibraryService;
+class IBookSource;
 class SourceManager;
 
 /// 下载服务 —— 负责从书源拉取章节内容并缓存到本地数据库。
@@ -50,6 +51,18 @@ public:
         std::function<void(int, int)> progress_cb = nullptr);
 
 private:
+    void download_book_chapter_by_chapter(
+        IBookSource* source,
+        const Book& book,
+        const std::vector<TocItem>& toc,
+        std::function<void(int, int)> progress_cb);
+
+    void download_book_batch(
+        IBookSource* source,
+        const Book& book,
+        const std::vector<TocItem>& toc,
+        std::function<void(int, int)> progress_cb);
+
     std::shared_ptr<SourceManager>  source_manager_;  ///< 书源管理器
     std::shared_ptr<LibraryService> library_service_;  ///< 书库服务（缓存读写）
 };

@@ -56,6 +56,22 @@ const appendQuery = (baseUrl, params) => {
   return `${baseUrl}${separator}${parts.join("&")}`;
 };
 
+const toFormBody = (params) => {
+  if (!params || typeof params !== "object") {
+    return "";
+  }
+
+  const parts = [];
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null || value === "") {
+      continue;
+    }
+    parts.push(`${host.url_encode(String(key))}=${host.url_encode(scalarToString(value))}`);
+  }
+  parts.sort();
+  return parts.join("&");
+};
+
 const requestJson = async (request) => {
   const response = await host.http_request(request);
   if (response.status < 200 || response.status >= 300) {
@@ -77,12 +93,40 @@ const getJson = async (url, headers, timeoutSeconds) =>
     timeout_seconds: timeoutSeconds,
   });
 
+const postFormJson = async (url, form, headers, timeoutSeconds) =>
+  requestJson({
+    method: "POST",
+    url,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      ...(headers || {}),
+    },
+    body: toFormBody(form),
+    timeout_seconds: timeoutSeconds,
+  });
+
+const postForm = async (url, form, headers, timeoutSeconds, followRedirects = true) =>
+  host.http_request({
+    method: "POST",
+    url,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      ...(headers || {}),
+    },
+    body: toFormBody(form),
+    timeout_seconds: timeoutSeconds,
+    follow_redirects: followRedirects,
+  });
+
 module.exports = {
   safeGet,
   getString,
   getNumber,
   requireEnv,
   appendQuery,
+  toFormBody,
   requestJson,
   getJson,
+  postFormJson,
+  postForm,
 };

@@ -27,6 +27,10 @@ public:
     std::optional<Chapter> get_chapter(
         const std::string& book_id,
         const std::string& item_id) override;
+    bool login() override;
+    bool is_logged_in() const override { return logged_in_; }
+    int get_batch_count(const std::string& book_id) override;
+    std::vector<Chapter> get_batch(const std::string& book_id, int batch_no) override;
 
 private:
     /// 从 JS 插件的 manifest JSON 中解析并填充 SourceInfo
@@ -38,7 +42,11 @@ private:
     SourceInfo                       info_;         ///< 书源基本信息
     SourceCapabilities               capabilities_; ///< 书源能力声明
     bool                             has_configure_ = false;  ///< 插件是否实现了 configure 方法
+    bool                             has_login_ = false;      ///< 插件是否实现了 login 方法
     bool                             has_book_info_ = false;  ///< 插件是否实现了 get_book_info 方法
+    bool                             has_batch_count_ = false; ///< 插件是否实现了 get_batch_count 方法
+    bool                             has_batch_ = false;       ///< 插件是否实现了 get_batch 方法
+    bool                             logged_in_ = false;       ///< 当前会话是否已登录
 };
 
 } // namespace novel

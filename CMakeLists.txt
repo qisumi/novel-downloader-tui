@@ -146,7 +146,7 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
         _WIN32_WINNT=0x0A00
         _CRT_SECURE_NO_WARNINGS
     )
-    target_link_libraries(${target_name} PRIVATE ws2_32)
+    target_link_libraries(${target_name} PRIVATE ws2_32 winhttp)
 endforeach()
 
 if (NOVEL_ENABLE_WEBVIEW_GUI)

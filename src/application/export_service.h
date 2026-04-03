@@ -10,6 +10,7 @@
 namespace novel {
 
 class DownloadService;
+class HttpService;
 
 /// 导出服务 —— 负责将书籍导出为 EPUB 或 TXT 格式。
 ///
@@ -20,7 +21,9 @@ class ExportService {
 public:
     /// 构造导出服务
     /// \param download_service 下载服务，用于收集章节内容
-    explicit ExportService(std::shared_ptr<DownloadService> download_service);
+    ExportService(
+        std::shared_ptr<DownloadService> download_service,
+        std::shared_ptr<HttpService> http_service);
 
     /// 导出书籍为指定格式文件。
     /// \param book                书籍信息
@@ -44,6 +47,7 @@ public:
 
 private:
     std::shared_ptr<DownloadService> download_service_;  ///< 下载服务实例
+    std::shared_ptr<HttpService>     http_service_;      ///< HTTP 服务实例
 };
 
 } // namespace novel
