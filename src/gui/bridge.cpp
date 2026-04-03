@@ -1,3 +1,9 @@
+/// @file bridge.cpp
+/// @brief C++ <-> JavaScript 桥接层实现
+///
+/// 实现所有 window.app.* API 的 C++ 端处理逻辑，
+/// 包括参数解析、服务调用、进度事件推送和错误处理。
+
 #include "gui/bridge.h"
 
 #include <sstream>
@@ -12,6 +18,7 @@ namespace {
 
 using json = nlohmann::json;
 
+/// 将 SourceInfo 转换为 JSON 对象
 json source_to_json(const SourceInfo& source, bool selected)
 {
     return {
@@ -26,6 +33,7 @@ json source_to_json(const SourceInfo& source, bool selected)
     };
 }
 
+/// 将 Book 转换为 JSON 对象
 json book_to_json(const Book& book)
 {
     return {
@@ -44,6 +52,7 @@ json book_to_json(const Book& book)
     };
 }
 
+/// 将 TocItem 转换为 JSON 对象
 json toc_to_json(const TocItem& item, bool cached)
 {
     return {
@@ -56,6 +65,7 @@ json toc_to_json(const TocItem& item, bool cached)
     };
 }
 
+/// 将 JSON 对象转换为 Book 结构体
 Book json_to_book(const json& payload)
 {
     Book book;
@@ -74,6 +84,7 @@ Book json_to_book(const json& payload)
     return book;
 }
 
+/// 生成下一个任务标签（如 "download-1"、"export-2"）
 std::string next_task_label(std::atomic_uint64_t& counter, std::string_view prefix)
 {
     std::ostringstream oss;
@@ -86,8 +97,13 @@ std::string next_task_label(std::atomic_uint64_t& counter, std::string_view pref
 GuiBridge::GuiBridge(webview::webview& window, GuiAppRuntime& runtime)
     : window_(window), runtime_(runtime) {}
 
+/// 安装所有 JS 绑定
+///
+/// 先注入 window.app 命名空间定义，然后逐个注册各 API 的 native 实现
 void GuiBridge::install()
 {
+    // 注入前端桥接层初始化脚本
+    // window.__NOVEL_BRIDGE__.wrap 用于将 native 绑定包装为 Promise 风格调用
     window_.init(R"JS(
 window.__NOVEL_BRIDGE__ = {
   wrap(name) {
@@ -108,6 +124,7 @@ window.app = {
 };
 )JS");
 
+    // ── 获取所有书源列表 ────────────────────────────────────────
     bind_async("native_get_sources", [&](const json&) {
         std::scoped_lock lock(core_mutex_);
         const auto current = runtime_.source_manager()->current_info();
@@ -124,6 +141,7 @@ window.app = {
         });
     });
 
+    // ── 切换当前书源 ────────────────────────────────────────────
     bind_async("native_select_source", [&](const json& args) {
         const auto source_id = require_string_arg(args, 0, "source_id");
 
@@ -139,6 +157,7 @@ window.app = {
         });
     });
 
+    // ── 搜索书籍 ────────────────────────────────────────────────
     bind_async("native_search_books", [&](const json& args) {
         const auto keywords = require_string_arg(args, 0, "keywords");
         const int page = optional_int_arg(args, 1, 0);
@@ -155,6 +174,8 @@ window.app = {
         });
     });
 
+    // ── 获取书籍详情 ────────────────────────────────────────────
+    // 优先从书源获取，失败后回退到本地数据库缓存
     bind_async("native_get_book_detail", [&](const json& args) {
         const auto book_id = require_string_arg(args, 0, "book_id");
 
@@ -172,6 +193,8 @@ window.app = {
         return make_success({{"book", book_to_json(*book)}});
     });
 
+    // ── 获取目录 ────────────────────────────────────────────────
+    // 返回目录列表及各章节的缓存状态
     bind_async("native_get_toc", [&](const json& args) {
         const auto book_id = require_string_arg(args, 0, "book_id");
         const bool force_remote = optional_bool_arg(args, 1, false);
@@ -201,6 +224,8 @@ window.app = {
         });
     });
 
+    // ── 下载书籍 ────────────────────────────────────────────────
+    // 通过事件推送下载进度（started / progress / finished）
     bind_async("native_download_book", [&](const json& args) {
         const auto payload = optional_object_arg(args, 0);
         if (!payload.is_object()) {
@@ -251,6 +276,8 @@ window.app = {
         });
     });
 
+    // ── 导出书籍 ────────────────────────────────────────────────
+    // 支持 EPUB 和 TXT 两种格式，通过事件推送导出进度
     bind_async("native_export_book", [&](const json& args) {
         const auto payload = optional_object_arg(args, 0);
         if (!payload.is_object()) {
@@ -322,6 +349,7 @@ window.app = {
         });
     });
 
+    // ── 列出书架 ────────────────────────────────────────────────
     bind_async("native_list_bookshelf", [&](const json&) {
         std::scoped_lock lock(core_mutex_);
         json items = json::array();
@@ -331,6 +359,7 @@ window.app = {
         return make_success({{"items", items}});
     });
 
+    // ── 保存到书架 ──────────────────────────────────────────────
     bind_async("native_save_bookshelf", [&](const json& args) {
         const auto payload = optional_object_arg(args, 0);
         if (!payload.is_object()) {
@@ -342,6 +371,7 @@ window.app = {
         return make_success({{"saved", true}});
     });
 
+    // ── 从书架移除 ──────────────────────────────────────────────
     bind_async("native_remove_bookshelf", [&](const json& args) {
         const auto book_id = require_string_arg(args, 0, "book_id");
 
@@ -352,6 +382,10 @@ window.app = {
     });
 }
 
+/// 注册异步 JS 绑定
+///
+/// 将 WebView bind 回调转发到后台线程执行，
+/// 自动捕获 ValidationError / SourceException / std::exception 并返回对应错误格式
 void GuiBridge::bind_async(
     const std::string& name,
     std::function<json(const json&)> handler)
@@ -361,9 +395,11 @@ void GuiBridge::bind_async(
             try {
                 resolve_success(call_id, handler(parse_args(raw_args)));
             } catch (const ValidationError& e) {
+                // 参数验证错误
                 spdlog::warn("GUI validation error [{}]: {}", name, e.what());
                 resolve_error(call_id, make_error("validation_error", "invalid_arguments", e.what()));
             } catch (const SourceException& e) {
+                // 书源操作错误
                 spdlog::error("GUI source error [{}]: {}", name, format_source_error_log(e.error()));
                 resolve_error(call_id, make_error(
                     "source_error",
@@ -375,6 +411,7 @@ void GuiBridge::bind_async(
                         {"plugin_path", e.error().plugin_path},
                     }));
             } catch (const std::exception& e) {
+                // 其他运行时错误
                 spdlog::error("GUI runtime error [{}]: {}", name, e.what());
                 resolve_error(call_id, make_error("runtime_error", "internal_error", e.what()));
             }
@@ -382,16 +419,21 @@ void GuiBridge::bind_async(
     }, nullptr);
 }
 
+/// 向 JS 端返回成功结果（resolve code = 0）
 void GuiBridge::resolve_success(const std::string& call_id, json payload)
 {
     window_.resolve(call_id, 0, payload.dump());
 }
 
+/// 向 JS 端返回错误结果（resolve code = 1）
 void GuiBridge::resolve_error(const std::string& call_id, const json& payload)
 {
     window_.resolve(call_id, 1, payload.dump());
 }
 
+/// 向前端派发自定义事件
+///
+/// 等效于 JS：window.dispatchEvent(new CustomEvent("novel:name", { detail: payload }))
 void GuiBridge::emit_event(const std::string& name, const json& payload)
 {
     std::string script =
@@ -400,6 +442,7 @@ void GuiBridge::emit_event(const std::string& name, const json& payload)
     window_.eval(script);
 }
 
+/// 解析 JS 端传入的参数字符串为 JSON 数组
 GuiBridge::json GuiBridge::parse_args(const std::string& raw_args)
 {
     auto parsed = json::parse(raw_args.empty() ? "[]" : raw_args);
@@ -409,6 +452,7 @@ GuiBridge::json GuiBridge::parse_args(const std::string& raw_args)
     return parsed;
 }
 
+/// 构造标准成功响应
 GuiBridge::json GuiBridge::make_success(json data)
 {
     return {
@@ -417,6 +461,7 @@ GuiBridge::json GuiBridge::make_success(json data)
     };
 }
 
+/// 构造标准错误响应
 GuiBridge::json GuiBridge::make_error(
     std::string type,
     std::string code,
@@ -434,6 +479,7 @@ GuiBridge::json GuiBridge::make_error(
     };
 }
 
+/// 获取必需的字符串参数，缺失或为空时抛出 ValidationError
 std::string GuiBridge::require_string_arg(
     const json& args,
     std::size_t index,
@@ -449,6 +495,7 @@ std::string GuiBridge::require_string_arg(
     return value;
 }
 
+/// 获取可选整数参数，缺失或为 null 时返回默认值
 int GuiBridge::optional_int_arg(
     const json& args,
     std::size_t index,
@@ -463,6 +510,7 @@ int GuiBridge::optional_int_arg(
     return args[index].get<int>();
 }
 
+/// 获取可选布尔参数，缺失或为 null 时返回默认值
 bool GuiBridge::optional_bool_arg(
     const json& args,
     std::size_t index,
@@ -477,6 +525,7 @@ bool GuiBridge::optional_bool_arg(
     return args[index].get<bool>();
 }
 
+/// 获取可选对象参数，缺失或为 null 时返回 nullptr
 GuiBridge::json GuiBridge::optional_object_arg(const json& args, std::size_t index)
 {
     if (args.size() <= index || args[index].is_null()) {

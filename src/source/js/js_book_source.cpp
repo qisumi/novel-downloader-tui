@@ -12,6 +12,7 @@ namespace {
 
 using json = nlohmann::json;
 
+/// 获取 JSON 值的可读类型名称，用于错误提示
 std::string json_type_name(const json& value) {
     if (value.is_null()) {
         return "null";
@@ -40,6 +41,7 @@ std::string json_type_name(const json& value) {
     return "unknown";
 }
 
+/// 构造并抛出一个包含完整上下文信息的 SourceException
 [[noreturn]] void throw_invalid_return(
     SourceErrorCode code,
     const std::string& source_id,
@@ -49,6 +51,8 @@ std::string json_type_name(const json& value) {
     throw SourceException({code, source_id, plugin_path, field, message});
 }
 
+/// 从 JSON 值中提取字符串，兼容字符串/整数/浮点/布尔类型
+/// 若值为 null 且 required=true，则抛出异常；否则返回 fallback
 std::string string_from_value(
     const json& value,
     const std::string& source_id,
@@ -101,6 +105,7 @@ std::string string_from_value(
         "expected string-compatible value, got " + json_type_name(value));
 }
 
+/// 从 JSON 值中提取浮点数，兼容数值和字符串类型
 double number_from_value(
     const json& value,
     const std::string& source_id,
@@ -128,6 +133,8 @@ double number_from_value(
         "expected numeric value, got " + json_type_name(value));
 }
 
+/// 从 JSON 值中提取整数，兼容整数/无符号整数/浮点/字符串类型
+/// @tparam IntT 目标整数类型（int / int64_t 等）
 template <typename IntT>
 IntT integer_from_value(
     const json& value,
@@ -166,6 +173,8 @@ IntT integer_from_value(
         "expected integer value, got " + json_type_name(value));
 }
 
+/// 从 JSON 值中提取字符串数组
+/// 若值不是数组则抛出 PluginInvalidManifest 异常
 std::vector<std::string> string_list_from_value(
     const json& value,
     const std::string& source_id,
@@ -192,6 +201,7 @@ std::vector<std::string> string_list_from_value(
     return items;
 }
 
+/// 从 JSON 对象解析 Book 结构体，校验所有字段类型
 Book parse_book(
     const json& value,
     const std::string& source_id,
@@ -236,6 +246,7 @@ Book parse_book(
     return book;
 }
 
+/// 从 JSON 对象解析 TocItem（目录条目）结构体
 TocItem parse_toc_item(
     const json& value,
     const std::string& source_id,
@@ -268,6 +279,7 @@ TocItem parse_toc_item(
     return item;
 }
 
+/// 从 JSON 对象解析 Chapter（章节正文）结构体
 Chapter parse_chapter(
     const json& value,
     const std::string& source_id,
@@ -288,6 +300,8 @@ Chapter parse_chapter(
     return chapter;
 }
 
+/// 带错误上下文的调用包装器：捕获异常并补充 source_id / plugin_path / operation 信息
+/// 确保所有异常都以 SourceException 形式抛出，携带完整调试上下文
 template <typename Fn>
 auto invoke_with_error_context(
     const std::string& source_id,
@@ -297,6 +311,7 @@ auto invoke_with_error_context(
     try {
         return fn();
     } catch (const SourceException& e) {
+        // 补全 SourceException 中缺失的上下文字段
         auto error = e.error();
         if (error.source_id.empty()) {
             error.source_id = source_id;
@@ -309,6 +324,7 @@ auto invoke_with_error_context(
         }
         throw SourceException(std::move(error));
     } catch (const std::exception& e) {
+        // 将普通异常转换为 SourceException，尝试从消息前缀推断错误码
         std::string message = e.what();
         const auto code = classify_prefixed_source_error(message)
                               .value_or(SourceErrorCode::PluginRuntimeError);
@@ -324,6 +340,10 @@ auto invoke_with_error_context(
 
 } // namespace
 
+// ── 构造与初始化 ─────────────
+
+/// 从引导阶段的插件信息构造 JS 书源
+/// 解析 manifest，并校验插件是否实现了必要方法（search / get_toc / get_chapter）
 JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBootstrapPlugin& plugin)
     : plugin_path_(plugin.plugin_path),
       module_id_(plugin.module_id),
@@ -332,6 +352,7 @@ JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBoo
       has_book_info_(plugin.has_book_info) {
     load_manifest(plugin.manifest);
 
+    // 校验插件是否导出了必需的方法
     if (!plugin.has_search) {
         throw SourceException({
             SourceErrorCode::PluginMissingMethod,
@@ -361,6 +382,9 @@ JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBoo
     }
 }
 
+// ── IBookSource 接口实现 ─────────────
+
+/// 调用 JS 插件的 configure 方法（若插件实现了该方法）
 void JsBookSource::configure() {
     if (!has_configure_) {
         return;
@@ -372,6 +396,7 @@ void JsBookSource::configure() {
     });
 }
 
+/// 调用 JS 插件的 search 方法，解析返回的书籍数组
 std::vector<Book> JsBookSource::search(const std::string& keywords, int page) {
     return invoke_with_error_context(info_.id, plugin_path_, "search", [&] {
         const auto result = runtime_->call(module_id_, "search", json::array({keywords, page}));
@@ -394,6 +419,7 @@ std::vector<Book> JsBookSource::search(const std::string& keywords, int page) {
     });
 }
 
+/// 调用 JS 插件的 get_book_info 方法，返回单本书籍详情（可选实现）
 std::optional<Book> JsBookSource::get_book_info(const std::string& book_id) {
     if (!has_book_info_) {
         return std::nullopt;
@@ -408,6 +434,7 @@ std::optional<Book> JsBookSource::get_book_info(const std::string& book_id) {
     });
 }
 
+/// 调用 JS 插件的 get_toc 方法，返回指定书籍的目录列表
 std::vector<TocItem> JsBookSource::get_toc(const std::string& book_id) {
     return invoke_with_error_context(info_.id, plugin_path_, "get_toc", [&] {
         const auto result = runtime_->call(module_id_, "get_toc", json::array({book_id}));
@@ -430,6 +457,7 @@ std::vector<TocItem> JsBookSource::get_toc(const std::string& book_id) {
     });
 }
 
+/// 调用 JS 插件的 get_chapter 方法，返回指定章节的正文内容
 std::optional<Chapter> JsBookSource::get_chapter(
     const std::string& book_id,
     const std::string& item_id) {
@@ -442,6 +470,9 @@ std::optional<Chapter> JsBookSource::get_chapter(
     });
 }
 
+// ── manifest 解析 ─────────────
+
+/// 从 JSON 对象中解析插件 manifest，填充 SourceInfo 字段
 void JsBookSource::load_manifest(const json& manifest) {
     if (!manifest.is_object()) {
         throw SourceException({

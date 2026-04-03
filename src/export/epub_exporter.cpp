@@ -1,3 +1,13 @@
+/// @file epub_exporter.cpp
+/// @brief EPUB 导出器实现
+///
+/// 完整流程：
+///   1. 创建输出目录，构建安全文件名
+///   2. 创建 ZIP 归档，写入 mimetype（不压缩）
+///   3. 写入 META-INF/container.xml
+///   4. 生成并写入 OEBPS/ 下的所有内容文件（OPF、NCX、导航、封面、样式、章节）
+///   5. 关闭 ZIP 归档，返回绝对路径
+
 #include "export/epub_exporter.h"
 #include "export/text_sanitizer.h"
 #include <tinyxml2.h>
@@ -18,9 +28,10 @@ using namespace tinyxml2;
 namespace novel {
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 辅助
+// 辅助工具函数
 // ──────────────────────────────────────────────────────────────────────────────
 
+/// XML 属性值转义：将 & < > " ' 替换为对应实体
 static std::string xml_escape(const std::string& s) {
     std::string out;
     out.reserve(s.size());
@@ -37,6 +48,7 @@ static std::string xml_escape(const std::string& s) {
     return out;
 }
 
+/// 去除字符串首尾的 ASCII 空白字符
 static std::string trim_ascii(std::string s) {
     auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
     size_t start = 0;
@@ -50,6 +62,7 @@ static std::string trim_ascii(std::string s) {
     return s.substr(start, end - start);
 }
 
+/// 清洗富文本为适合内联使用的纯文本（将换行替换为空格）
 static std::string clean_inline_text(const std::string& raw) {
     std::string cleaned = text_sanitizer::html_to_plain_text(raw);
     for (char& c : cleaned) {
@@ -58,15 +71,23 @@ static std::string clean_inline_text(const std::string& raw) {
     return trim_ascii(cleaned);
 }
 
+/// EPUB 章节视图：保存清洗后的标题与正文
 struct EpubChapterView {
-    std::string title;
-    std::string content;
+    std::string title;    ///< 章节标题（已清洗）
+    std::string content;  ///< 章节正文（已清洗）
 };
 
+/// 将原始 Chapter 转换为 EpubChapterView
+///
+/// 自动处理标题提取逻辑：
+///   - 优先使用 chapter.title
+///   - 若 title 为空则取正文首行作为标题
+///   - 若首行与标题相同则从正文中去除首行（避免重复显示）
 static EpubChapterView make_epub_chapter_view(const Chapter& ch) {
     EpubChapterView view;
     view.title = clean_inline_text(ch.title);
 
+    // 将 HTML 正文转换为纯文本
     std::string content = text_sanitizer::html_to_plain_text(ch.content);
     std::istringstream iss(content);
     std::string first_line;
@@ -77,10 +98,12 @@ static EpubChapterView make_epub_chapter_view(const Chapter& ch) {
     }
 
     const std::string normalized_first_line = clean_inline_text(first_line);
+    // 若标题为空，使用首行作为标题
     if (view.title.empty() && !normalized_first_line.empty()) {
         view.title = normalized_first_line;
     }
 
+    // 若首行与标题完全相同，则跳过首行避免正文重复显示
     const bool should_drop_first_line =
         !normalized_first_line.empty() && normalized_first_line == view.title;
 
@@ -101,6 +124,7 @@ static EpubChapterView make_epub_chapter_view(const Chapter& ch) {
     return view;
 }
 
+/// 获取当前 UTC 日期，格式为 YYYY-MM-DD
 static std::string today_iso() {
     auto now = std::chrono::system_clock::now();
     std::time_t t = std::chrono::system_clock::to_time_t(now);
@@ -115,6 +139,9 @@ static std::string today_iso() {
     return ss.str();
 }
 
+/// 创建 zip_source，复制一份字符串数据交给 libzip 管理
+///
+/// 使用 malloc 复制数据，设置 free 标志让 libzip 在用完后自动释放
 static zip_source_t* zip_source_from_string_copy(zip_t* za,
                                                  const std::string& content) {
     void* data = nullptr;
@@ -126,6 +153,12 @@ static zip_source_t* zip_source_from_string_copy(zip_t* za,
     return zip_source_buffer(za, data, content.size(), 1);
 }
 
+/// 向 ZIP 归档中添加一个字符串文件
+///
+/// @param za      ZIP 归档句柄
+/// @param path    归档内的文件路径
+/// @param content 文件内容
+/// @return 添加成功返回 true
 static bool zip_add_str(zip_t* za,
                                const std::string& path,
                                const std::string& content) {
@@ -146,7 +179,7 @@ std::string EpubExporter::make_mimetype() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// META-INF/container.xml
+// META-INF/container.xml — 指向 OPF 包文档的入口
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_container_xml() {
     return R"(<?xml version="1.0" encoding="UTF-8"?>
@@ -161,6 +194,8 @@ std::string EpubExporter::make_container_xml() {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // OEBPS/content.opf — OPF 包文档（EPUB 3 with EPUB 2 fallbacks）
+//
+// 声明所有资源（manifest）和阅读顺序（spine），包含元数据（标题、作者、语言等）
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_opf(const Book& book,
                                    const std::vector<Chapter>& chapters) {
@@ -187,6 +222,7 @@ std::string EpubExporter::make_opf(const Book& book,
     <item id="css" href="style.css"  media-type="text/css"/>
     <item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>
 )";
+    // 在 manifest 中声明每个章节文件
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
         s << "    <item id=\"ch" << i << "\" href=\"chapter_" << i
           << ".xhtml\" media-type=\"application/xhtml+xml\"/>\n";
@@ -196,6 +232,7 @@ std::string EpubExporter::make_opf(const Book& book,
     <itemref idref="cover"/>
     <itemref idref="nav"/>
 )";
+    // 在 spine 中按顺序列出每个章节
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
         s << "    <itemref idref=\"ch" << i << "\"/>\n";
     }
@@ -205,6 +242,8 @@ std::string EpubExporter::make_opf(const Book& book,
 
 // ──────────────────────────────────────────────────────────────────────────────
 // OEBPS/toc.ncx — EPUB 2 兼容目录
+//
+// 为旧版阅读器提供导航信息，每个 navPoint 对应一个章节
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_ncx(const Book& book,
                                    const std::vector<Chapter>& chapters) {
@@ -223,6 +262,7 @@ std::string EpubExporter::make_ncx(const Book& book,
     <docTitle><text>)" << xml_escape(clean_title) << R"(</text></docTitle>
   <navMap>
 )";
+    // 为每个章节生成一个导航点
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
                 const auto view = make_epub_chapter_view(chapters[i]);
         s << "    <navPoint id=\"nav" << i << "\" playOrder=\"" << (i + 1) << "\">\n"
@@ -236,6 +276,8 @@ std::string EpubExporter::make_ncx(const Book& book,
 
 // ──────────────────────────────────────────────────────────────────────────────
 // OEBPS/nav.xhtml — EPUB 3 导航文件
+//
+// 使用 HTML <nav epub:type="toc"> 结构，供 EPUB 3 阅读器解析目录
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_nav_xhtml(const Book& book,
                                          const std::vector<Chapter>& chapters) {
@@ -252,6 +294,7 @@ std::string EpubExporter::make_nav_xhtml(const Book& book,
 <body>
 <nav epub:type="toc" id="toc"><h1>目录</h1><ol>
 )";
+    // 生成目录列表项
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
                 const auto view = make_epub_chapter_view(chapters[i]);
         s << "<li><a href=\"chapter_" << i << ".xhtml\">"
@@ -263,6 +306,8 @@ std::string EpubExporter::make_nav_xhtml(const Book& book,
 
 // ──────────────────────────────────────────────────────────────────────────────
 // OEBPS/chapter_N.xhtml — 章节正文
+//
+// 每个章节生成独立的 XHTML 文件，正文按行拆分为 <p> 段落
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_chapter_xhtml(const Chapter& ch, int /*index*/) {
     const auto view = make_epub_chapter_view(ch);
@@ -277,7 +322,7 @@ std::string EpubExporter::make_chapter_xhtml(const Chapter& ch, int /*index*/) {
 <body>
 <h2 class="chapter-title">)" << xml_escape(view.title) << R"(</h2>
 )";
-    // 按换行拆段
+    // 按换行拆段，每行生成一个 <p> 元素
     std::istringstream iss(view.content);
     std::string line;
     while (std::getline(iss, line)) {
@@ -289,7 +334,9 @@ std::string EpubExporter::make_chapter_xhtml(const Chapter& ch, int /*index*/) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// OEBPS/cover.xhtml
+// OEBPS/cover.xhtml — 封面页
+//
+// 显示书名、作者和简介，作为 EPUB 打开后的第一页
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_cover_xhtml(const Book& book) {
     const auto clean_title = clean_inline_text(book.title);
@@ -312,7 +359,9 @@ std::string EpubExporter::make_cover_xhtml(const Book& book) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// OEBPS/style.css
+// OEBPS/style.css — 全局样式表
+//
+// 定义封面页、目录页和章节正文的默认样式
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::make_stylesheet() {
     return R"(body {
@@ -335,6 +384,11 @@ p { text-indent: 2em; margin: 0.4em 0; }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // 主导出函数
+//
+// 按 EPUB 标准顺序将所有文件写入 ZIP 归档：
+//   1. mimetype（不压缩，必须为首个文件）
+//   2. META-INF/container.xml
+//   3. OEBPS/ 下的所有内容文件
 // ──────────────────────────────────────────────────────────────────────────────
 std::string EpubExporter::export_book(const Book& book,
                                       const std::vector<Chapter>& chapters,
@@ -348,6 +402,7 @@ std::string EpubExporter::export_book(const Book& book,
     fs::path out_path = fs::path(opts.output_dir) /
                         (safe_title + opts.filename_suffix + ".epub");
 
+    // 创建 ZIP 归档（如果已存在则覆盖）
     int err = 0;
     zip_t* za = zip_open(out_path.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, &err);
     if (!za) return {};
@@ -367,6 +422,7 @@ std::string EpubExporter::export_book(const Book& book,
             zip_discard(za);
             return {};
         }
+        // mimetype 文件必须使用 STORE 方式（不压缩），符合 EPUB 规范
         if (zip_set_file_compression(za, idx, ZIP_CM_STORE, 0) < 0) {
             zip_discard(za);
             return {};
@@ -380,6 +436,7 @@ std::string EpubExporter::export_book(const Book& book,
     }
 
     // ── OEBPS/ ───────────────────────────────────────────────
+    // 写入元数据文件：OPF 包文档、NCX 目录、EPUB3 导航、封面页、样式表
     if (!zip_add_str(za, "OEBPS/content.opf", make_opf(book, chapters)) ||
         !zip_add_str(za, "OEBPS/toc.ncx",     make_ncx(book, chapters)) ||
         !zip_add_str(za, "OEBPS/nav.xhtml",   make_nav_xhtml(book, chapters)) ||
@@ -389,6 +446,7 @@ std::string EpubExporter::export_book(const Book& book,
         return {};
     }
 
+    // 写入各章节 XHTML 文件
     int total = static_cast<int>(chapters.size());
     for (int i = 0; i < total; ++i) {
         std::string fname = "OEBPS/chapter_" + std::to_string(i) + ".xhtml";
@@ -399,6 +457,7 @@ std::string EpubExporter::export_book(const Book& book,
         if (progress_cb) progress_cb(i + 1, total);
     }
 
+    // 关闭 ZIP 归档（将数据写入磁盘）
     if (zip_close(za) < 0) {
         zip_discard(za);
         return {};

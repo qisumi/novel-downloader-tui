@@ -9,8 +9,11 @@
 
 namespace novel {
 
+/// 基于 JS 插件的书源实现，将 JS 插件适配到 IBookSource 接口
+/// 负责解析 JS 插件返回的 JSON 数据，校验字段类型并转换为 C++ 结构体
 class JsBookSource : public IBookSource {
 public:
+    /// 构造时传入 JS 运行时和引导阶段的插件信息
     JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBootstrapPlugin& plugin);
 
     const SourceInfo& info() const override { return info_; }
@@ -26,15 +29,16 @@ public:
         const std::string& item_id) override;
 
 private:
+    /// 从 JS 插件的 manifest JSON 中解析并填充 SourceInfo
     void load_manifest(const nlohmann::json& manifest);
 
-    std::string                      plugin_path_;
-    std::string                      module_id_;
-    std::shared_ptr<JsPluginRuntime> runtime_;
-    SourceInfo                       info_;
-    SourceCapabilities               capabilities_;
-    bool                             has_configure_ = false;
-    bool                             has_book_info_ = false;
+    std::string                      plugin_path_;  ///< 插件文件绝对路径
+    std::string                      module_id_;    ///< 插件模块 ID（如 "fanqie"）
+    std::shared_ptr<JsPluginRuntime> runtime_;      ///< JS 插件运行时
+    SourceInfo                       info_;         ///< 书源基本信息
+    SourceCapabilities               capabilities_; ///< 书源能力声明
+    bool                             has_configure_ = false;  ///< 插件是否实现了 configure 方法
+    bool                             has_book_info_ = false;  ///< 插件是否实现了 get_book_info 方法
 };
 
 } // namespace novel

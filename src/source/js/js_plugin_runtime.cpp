@@ -16,12 +16,14 @@ namespace {
 
 using json = nlohmann::json;
 
+/// 构造标准错误载荷，用于 JS 端接收错误信息
 json make_error_payload(const std::string& message) {
     return {
         {"message", message},
     };
 }
 
+/// 从 JS 调用参数中提取指定位置的字符串参数，并进行类型校验
 std::string require_string_arg(const json& args, std::size_t index, const char* name) {
     if (args.size() <= index || !args[index].is_string()) {
         throw std::runtime_error(prefix_source_error(
@@ -31,6 +33,8 @@ std::string require_string_arg(const json& args, std::size_t index, const char* 
     return args[index].get<std::string>();
 }
 
+/// 从 JSON 对象构造 HttpRequest 结构体，校验字段类型
+/// 支持解析 method、url、headers、body、timeout_seconds 字段
 HttpRequest request_from_json(const json& payload) {
     if (!payload.is_object()) {
         throw std::runtime_error(prefix_source_error(
@@ -56,6 +60,7 @@ HttpRequest request_from_json(const json& payload) {
             "http_request requires a non-empty url"));
     }
 
+    // 解析可选的超时时间
     if (payload.contains("timeout_seconds") && !payload["timeout_seconds"].is_null()) {
         if (!payload["timeout_seconds"].is_number_integer()) {
             throw std::runtime_error(prefix_source_error(
@@ -65,6 +70,7 @@ HttpRequest request_from_json(const json& payload) {
         request.timeout_seconds = payload["timeout_seconds"].get<int>();
     }
 
+    // 解析可选的请求头，值支持字符串/整数/浮点/布尔类型
     if (payload.contains("headers") && !payload["headers"].is_null()) {
         if (!payload["headers"].is_object()) {
             throw std::runtime_error(prefix_source_error(
@@ -98,6 +104,7 @@ HttpRequest request_from_json(const json& payload) {
         }
     }
 
+    // 解析可选的请求体：字符串直接使用，其他类型序列化为 JSON
     if (payload.contains("body") && !payload["body"].is_null()) {
         if (payload["body"].is_string()) {
             request.body = payload["body"].get<std::string>();
@@ -110,6 +117,7 @@ HttpRequest request_from_json(const json& payload) {
     return request;
 }
 
+/// 将 HttpResponse 转换为 JSON 对象，供 JS 端使用
 json response_to_json(const HttpResponse& response) {
     json headers = json::object();
     for (const auto& [key, value] : response.headers) {
@@ -125,9 +133,14 @@ json response_to_json(const HttpResponse& response) {
 
 } // namespace
 
+// ── 构造与安装 ─────────────
+
 JsPluginRuntime::JsPluginRuntime(webview::webview& window, std::shared_ptr<HostApi> host_api)
     : window_(window), host_api_(std::move(host_api)) {}
 
+/// 向 WebView 注入完整的 JS 插件运行时框架
+/// 包括：host 对象（http_get/http_request/env_get/url_encode/log_*/config_error）、
+/// 模块注册表、require() 加载器、invoke() RPC 调用器
 void JsPluginRuntime::install() {
     window_.init(R"JS(
 (() => {
@@ -137,12 +150,15 @@ void JsPluginRuntime::install() {
     return;
   }
 
+  // 路径标准化：反斜杠转正斜杠
   const normalizePath = (value) => String(value || "").replace(/\\/g, "/");
 
+  // RFC 3986 兼容的 URL 编码
   const encodeRfc3986 = (value) =>
     encodeURIComponent(String(value))
       .replace(/[!'()*]/g, (ch) => "%" + ch.charCodeAt(0).toString(16).toUpperCase());
 
+  // 统一提取错误消息
   const errorMessage = (error) => {
     if (error && typeof error === "object" && typeof error.message === "string" && error.message.length > 0) {
       return error.message;
@@ -150,6 +166,7 @@ void JsPluginRuntime::install() {
     return String(error);
   };
 
+  // 模块 ID 标准化：去除 .js 后缀、解析 . 和 .. 路径段
   const normalizeModuleId = (value) => {
     let moduleId = normalizePath(value);
     if (moduleId.endsWith(".js")) {
@@ -172,6 +189,7 @@ void JsPluginRuntime::install() {
     return stack.join("/");
   };
 
+  // ── host 对象：暴露给 JS 插件的宿主 API ─────────────
   const host = {
     async http_get(url, headers = {}, timeoutSeconds = 30) {
       const response = await this.http_request({
@@ -216,14 +234,16 @@ void JsPluginRuntime::install() {
     },
   };
 
+  // ── 插件运行时核心对象 ─────────────
   window[runtimeKey] = {
-    modules: new Map(),
-    cache: new Map(),
+    modules: new Map(),   // 模块注册表（module_id → {pluginPath, source}）
+    cache: new Map(),     // 模块缓存（module_id → module.exports）
     host,
     reset() {
       this.modules.clear();
       this.cache.clear();
     },
+    // 注册单个模块
     registerModule(moduleId, pluginPath, source) {
       const normalized = normalizeModuleId(moduleId);
       this.modules.set(normalized, {
@@ -232,6 +252,7 @@ void JsPluginRuntime::install() {
       });
       this.cache.delete(normalized);
     },
+    // 解析模块路径（支持相对路径 ./ ../）
     resolve(specifier, fromModuleId = "") {
       const normalizedSpecifier = normalizeModuleId(specifier);
       const baseParts = normalizeModuleId(fromModuleId).split("/").filter(Boolean);
@@ -257,6 +278,7 @@ void JsPluginRuntime::install() {
 
       throw new Error(`cannot resolve module "${String(specifier)}" from "${String(fromModuleId)}"`);
     },
+    // CommonJS 风格的 require 实现
     require(specifier, fromModuleId = "") {
       const moduleId = this.resolve(specifier, fromModuleId);
       if (this.cache.has(moduleId)) {
@@ -272,6 +294,7 @@ void JsPluginRuntime::install() {
       this.cache.set(moduleId, module);
 
       const localRequire = (childSpecifier) => this.require(childSpecifier, moduleId);
+      // 使用 Function 构造器执行模块源码，注入 module/exports/require/host
       const runner = new Function(
         "module",
         "exports",
@@ -283,6 +306,7 @@ void JsPluginRuntime::install() {
       runner(module, module.exports, localRequire, this.host);
       return module.exports;
     },
+    // RPC 调用入口：加载插件 → 调用方法 → 返回结果/错误
     async invoke(payload) {
       const callId = String(payload.call_id);
       try {
@@ -316,6 +340,9 @@ void JsPluginRuntime::install() {
 })();
 )JS");
 
+    // ── 绑定 C++ 端回调函数，供 JS 端调用 ─────────────
+
+    // 处理 JS 端的 HTTP 请求调用
     bind_async("native_plugin_http_request", [this](const json& args) {
         const auto request = request_from_json(args.at(0));
         const auto response = host_api_->http_request(request);
@@ -327,6 +354,7 @@ void JsPluginRuntime::install() {
         return response_to_json(*response);
     });
 
+    // 处理 JS 端的环境变量读取
     bind_async("native_plugin_env_get", [this](const json& args) {
         const auto name = require_string_arg(args, 0, "name");
         std::optional<std::string> fallback = std::nullopt;
@@ -343,6 +371,7 @@ void JsPluginRuntime::install() {
         return value ? json(*value) : json(nullptr);
     });
 
+    // 处理 JS 端的日志输出
     bind_async("native_plugin_log", [this](const json& args) {
         const auto level = require_string_arg(args, 0, "level");
         const auto message = require_string_arg(args, 1, "message");
@@ -358,6 +387,7 @@ void JsPluginRuntime::install() {
         return json(nullptr);
     });
 
+    // 处理 JS 端的 RPC 调用结果回调
     window_.bind("native_plugin_result", [this](std::string raw_args) {
         const auto args = parse_args(raw_args);
         if (args.empty() || !args[0].is_object()) {
@@ -387,6 +417,7 @@ void JsPluginRuntime::install() {
         return json(nullptr).dump();
     });
 
+    // 处理 JS 端的引导完成回调，收集所有成功加载的插件信息
     window_.bind("native_plugin_bootstrap", [this](std::string raw_args) {
         const auto args = parse_args(raw_args);
         if (args.empty() || !args[0].is_object()) {
@@ -404,6 +435,7 @@ void JsPluginRuntime::install() {
             if (bootstrap_failed_) {
                 bootstrap_error_ = payload.value("message", "plugin bootstrap failed");
             } else {
+                // 记录加载失败的插件错误日志
                 if (payload.contains("errors") && payload["errors"].is_array()) {
                     for (const auto& item : payload["errors"]) {
                         spdlog::error("Failed to evaluate JS plugin {}: {}",
@@ -412,6 +444,7 @@ void JsPluginRuntime::install() {
                     }
                 }
 
+                // 收集成功加载的插件及其 manifest 和方法信息
                 if (payload.contains("plugins") && payload["plugins"].is_array()) {
                     for (const auto& item : payload["plugins"]) {
                         JsBootstrapPlugin plugin;
@@ -434,6 +467,9 @@ void JsPluginRuntime::install() {
     });
 }
 
+// ── 模块注册与引导 ─────────────
+
+/// 将 JS 模块逐个注册到 WebView 的模块表中
 void JsPluginRuntime::queue_modules(const std::vector<JsModule>& modules) {
     for (const auto& module : modules) {
         window_.init(
@@ -444,6 +480,7 @@ void JsPluginRuntime::queue_modules(const std::vector<JsModule>& modules) {
     }
 }
 
+/// 触发引导流程：注入 JS 代码依次 require 候选插件、检测导出方法、收集 manifest
 void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
     {
         std::lock_guard lock(bootstrap_mutex_);
@@ -453,6 +490,7 @@ void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
         bootstrap_plugins_.clear();
     }
 
+    // 构建候选插件列表的 JSON 数组
     json candidates = json::array();
     for (const auto& plugin : plugins) {
         candidates.push_back({
@@ -461,6 +499,7 @@ void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
         });
     }
 
+    // 注入引导脚本：逐个加载插件并检测导出方法，最终通过 native_plugin_bootstrap 回传结果
     window_.init(
         "(async () => {"
         "  try {"
@@ -498,6 +537,10 @@ void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
         "})();");
 }
 
+// ── 同步等待与 RPC 调用 ─────────────
+
+/// 阻塞等待引导流程完成（超时 30 秒）
+/// 返回成功加载的插件列表；超时或失败时抛出异常
 std::vector<JsBootstrapPlugin> JsPluginRuntime::wait_for_bootstrap() {
     std::unique_lock lock(bootstrap_mutex_);
     if (!bootstrap_cv_.wait_for(lock, std::chrono::seconds(30), [&] {
@@ -513,6 +556,10 @@ std::vector<JsBootstrapPlugin> JsPluginRuntime::wait_for_bootstrap() {
     return bootstrap_plugins_;
 }
 
+/// 调用指定插件的某个方法（异步 RPC）
+/// 1. 生成唯一 call_id，创建 PendingCall 条目
+/// 2. 通过 WebView dispatch 注入调用脚本
+/// 3. 阻塞等待 JS 端通过 native_plugin_result 回传结果（超时 60 秒）
 JsPluginRuntime::json JsPluginRuntime::call(
     const std::string& module_id,
     const std::string& operation,
@@ -535,10 +582,12 @@ JsPluginRuntime::json JsPluginRuntime::call(
         }).dump() +
         ");";
 
+    // 在 WebView 主线程中执行调用脚本
     window_.dispatch([this, script] {
         window_.eval(script);
     });
 
+    // 阻塞等待调用完成
     std::unique_lock lock(calls_mutex_);
     if (!calls_cv_.wait_for(lock, std::chrono::seconds(60), [&] {
             auto it = pending_calls_.find(call_id);
@@ -562,6 +611,10 @@ JsPluginRuntime::json JsPluginRuntime::call(
     return pending.result.value_or(json(nullptr));
 }
 
+// ── 内部工具方法 ─────────────
+
+/// 以异步线程方式绑定 WebView JS 回调
+/// 将耗时的 C++ 处理（如 HTTP 请求）放到独立线程，避免阻塞 WebView 主线程
 void JsPluginRuntime::bind_async(
     const std::string& name,
     std::function<json(const json&)> handler) {
@@ -585,6 +638,7 @@ void JsPluginRuntime::bind_async(
     }, nullptr);
 }
 
+/// 解析 WebView 传来的原始 JSON 字符串为 JSON 数组
 JsPluginRuntime::json JsPluginRuntime::parse_args(const std::string& raw_args) {
     auto parsed = json::parse(raw_args.empty() ? "[]" : raw_args);
     if (!parsed.is_array()) {

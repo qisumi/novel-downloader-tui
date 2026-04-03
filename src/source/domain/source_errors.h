@@ -8,28 +8,31 @@
 
 namespace novel {
 
+/// 书源错误码枚举，涵盖插件加载、运行时、数据校验等错误类型
 enum class SourceErrorCode {
-    PluginLoadFailed,
-    PluginInvalidManifest,
-    PluginMissingMethod,
-    PluginConfigError,
-    PluginRuntimeError,
-    PluginRequestError,
-    PluginDataError,
-    InvalidReturnType,
-    InvalidReturnField,
-    NetworkError,
-    SourceNotSelected,
+    PluginLoadFailed,         ///< 插件加载失败
+    PluginInvalidManifest,    ///< 插件清单(manifest)无效
+    PluginMissingMethod,      ///< 插件缺少必要方法
+    PluginConfigError,        ///< 插件配置错误
+    PluginRuntimeError,       ///< 插件运行时错误
+    PluginRequestError,       ///< 插件请求参数错误
+    PluginDataError,          ///< 插件数据处理错误
+    InvalidReturnType,        ///< 插件返回值类型错误
+    InvalidReturnField,       ///< 插件返回值字段错误
+    NetworkError,             ///< 网络请求错误
+    SourceNotSelected,        ///< 未选择书源
 };
 
+/// 书源错误详情结构体
 struct SourceError {
-    SourceErrorCode code = SourceErrorCode::PluginRuntimeError;
-    std::string     source_id;
-    std::string     plugin_path;
-    std::string     operation;
-    std::string     message;
+    SourceErrorCode code = SourceErrorCode::PluginRuntimeError; ///< 错误码
+    std::string     source_id;    ///< 所属书源 ID
+    std::string     plugin_path;  ///< 插件文件路径
+    std::string     operation;    ///< 出错的操作名（如 "search"、"get_toc"）
+    std::string     message;      ///< 错误描述信息
 };
 
+/// 将错误码转换为字符串名称，用于日志输出
 inline std::string_view source_error_code_name(SourceErrorCode code) {
     switch (code) {
     case SourceErrorCode::PluginLoadFailed:
@@ -58,6 +61,8 @@ inline std::string_view source_error_code_name(SourceErrorCode code) {
     return "unknown_error";
 }
 
+/// 获取特定错误码的前缀字符串，用于在 JS↔C++ 之间传递分类错误信息
+/// 部分 JS 端抛出的错误会带有前缀标记，C++ 端据此分类
 inline std::optional<std::string_view> source_error_prefix(SourceErrorCode code) {
     switch (code) {
     case SourceErrorCode::PluginConfigError:
@@ -73,6 +78,7 @@ inline std::optional<std::string_view> source_error_prefix(SourceErrorCode code)
     }
 }
 
+/// 为错误消息添加前缀标记
 inline std::string prefix_source_error(SourceErrorCode code, std::string_view message) {
     auto prefix = source_error_prefix(code);
     if (!prefix) {
@@ -81,6 +87,7 @@ inline std::string prefix_source_error(SourceErrorCode code, std::string_view me
     return std::string(*prefix) + std::string(message);
 }
 
+/// 根据消息前缀分类错误码（反向解析带前缀的错误消息）
 inline std::optional<SourceErrorCode> classify_prefixed_source_error(std::string_view message) {
     for (SourceErrorCode code : {
              SourceErrorCode::PluginConfigError,
@@ -96,6 +103,7 @@ inline std::optional<SourceErrorCode> classify_prefixed_source_error(std::string
     return std::nullopt;
 }
 
+/// 去除错误消息中的前缀标记，返回纯文本
 inline std::string strip_source_error_prefix(std::string_view message) {
     if (auto code = classify_prefixed_source_error(message)) {
         auto prefix = source_error_prefix(*code);
@@ -104,6 +112,7 @@ inline std::string strip_source_error_prefix(std::string_view message) {
     return std::string(message);
 }
 
+/// 将 SourceError 格式化为面向用户的中文错误描述
 inline std::string format_source_error(const SourceError& error) {
     std::ostringstream oss;
 
@@ -156,6 +165,7 @@ inline std::string format_source_error(const SourceError& error) {
     return oss.str();
 }
 
+/// 将 SourceError 格式化为结构化日志文本，用于 spdlog 输出
 inline std::string format_source_error_log(const SourceError& error) {
     std::ostringstream oss;
     oss << "code=" << source_error_code_name(error.code);
@@ -174,6 +184,7 @@ inline std::string format_source_error_log(const SourceError& error) {
     return oss.str();
 }
 
+/// 书源异常类，携带 SourceError 详情并可被 std::runtime_error 捕获
 class SourceException : public std::runtime_error {
 public:
     explicit SourceException(SourceError error)

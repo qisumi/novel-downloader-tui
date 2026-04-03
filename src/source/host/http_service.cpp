@@ -11,11 +11,16 @@ namespace novel {
 
 namespace {
 
+/// URL 拆分结果，将完整 URL 分为协议+主机 和 路径 两部分
 struct SplitUrlResult {
-    std::string scheme_host;
-    std::string path;
+    std::string scheme_host; ///< 如 "https://example.com"
+    std::string path;        ///< 如 "/api/v1/books"
 };
 
+/// 将完整 URL 拆分为协议+主机部分和路径部分
+/// 例如 "https://api.example.com/v1/search?q=test" →
+///   scheme_host = "https://api.example.com"
+///   path = "/v1/search?q=test"
 SplitUrlResult split_url(const std::string& url) {
     std::size_t scheme_end = url.find("://");
     std::size_t host_end = std::string::npos;
@@ -39,6 +44,7 @@ SplitUrlResult split_url(const std::string& url) {
     return result;
 }
 
+/// 将 HTTP 方法名统一转为大写
 std::string normalize_method(std::string method) {
     for (char& ch : method) {
         ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
@@ -46,6 +52,7 @@ std::string normalize_method(std::string method) {
     return method;
 }
 
+/// 从请求头中检测 Content-Type，若未指定则回退到请求对象的 content_type 或默认值
 std::string detect_content_type(const HttpRequest& request) {
     for (const auto& [key, value] : request.headers) {
         std::string lower_key;
@@ -66,6 +73,7 @@ std::string detect_content_type(const HttpRequest& request) {
 
 } // namespace
 
+/// 发送自定义 HTTP 请求，根据方法分发到 cpp-httplib 对应调用
 std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const {
     SplitUrlResult url = split_url(request.url);
     std::string    method = normalize_method(request.method);
@@ -75,7 +83,7 @@ std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const 
     httplib::Client cli(url.scheme_host);
     cli.set_connection_timeout(request.timeout_seconds, 0);
     cli.set_read_timeout(request.timeout_seconds, 0);
-    cli.set_follow_location(true);
+    cli.set_follow_location(true); // 自动跟随重定向
 
     httplib::Headers headers;
     for (const auto& [key, value] : request.headers) {
@@ -108,6 +116,7 @@ std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const 
         return std::nullopt;
     }
 
+    // 将 cpp-httplib 响应转换为本项目的 HttpResponse 结构
     HttpResponse response;
     response.status = result->status;
     response.body = result->body;
@@ -118,6 +127,7 @@ std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const 
     return response;
 }
 
+/// 发送 GET 请求，仅在返回 2xx 状态码时返回响应
 std::optional<HttpResponse> HttpService::get(
     const std::string& url,
     const std::vector<std::pair<std::string, std::string>>& headers,
@@ -139,6 +149,7 @@ std::optional<HttpResponse> HttpService::get(
     return response;
 }
 
+/// 对字符串进行百分比编码，保留字母数字及 - _ . ~ 安全字符
 std::string url_encode(const std::string& value) {
     std::ostringstream encoded;
     encoded << std::uppercase << std::hex;

@@ -7,30 +7,37 @@
 
 namespace novel {
 
+/// HTTP 请求结构体，封装请求方法、URL、请求头、请求体等参数
 struct HttpRequest {
-    std::string method = "GET";
-    std::string url;
-    std::vector<std::pair<std::string, std::string>> headers;
-    std::string body;
-    std::string content_type;
-    int timeout_seconds = 30;
+    std::string method = "GET";    ///< 请求方法（GET/POST/PUT/PATCH/DELETE/HEAD）
+    std::string url;               ///< 请求 URL
+    std::vector<std::pair<std::string, std::string>> headers; ///< 请求头键值对
+    std::string body;              ///< 请求体
+    std::string content_type;      ///< 请求体内容类型（如 "application/json"）
+    int timeout_seconds = 30;      ///< 超时时间（秒）
 };
 
+/// HTTP 响应结构体，封装状态码、响应体、响应头
 struct HttpResponse {
-    int status = 0;
-    std::string body;
-    std::vector<std::pair<std::string, std::string>> headers;
+    int status = 0;                ///< HTTP 状态码
+    std::string body;              ///< 响应体文本
+    std::vector<std::pair<std::string, std::string>> headers; ///< 响应头键值对
 };
 
+/// HTTP 服务类，提供同步 HTTP 请求能力（底层基于 cpp-httplib）
+/// 被 HostApi 调用，为 JS 插件提供网络访问能力
 class HttpService {
 public:
+    /// 发送自定义 HTTP 请求
     std::optional<HttpResponse> send(const HttpRequest& request) const;
+    /// 发送 GET 请求，仅返回 2xx 状态的响应
     std::optional<HttpResponse> get(
         const std::string& url,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         int timeout_seconds = 30) const;
 };
 
+/// 对字符串进行 RFC 3986 兼容的 URL 编码
 std::string url_encode(const std::string& value);
 
 } // namespace novel
