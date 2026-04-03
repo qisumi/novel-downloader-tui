@@ -13,9 +13,6 @@
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
     try {
-        novel::GuiAppRuntime runtime;
-        runtime.initialize();
-
         webview::webview window(
 #ifdef NDEBUG
             false,
@@ -23,6 +20,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             true,
 #endif
             nullptr);
+
+        novel::GuiAppRuntime runtime;
+        runtime.initialize(window);
 
         novel::GuiBridge bridge(window, runtime);
 

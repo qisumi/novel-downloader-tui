@@ -194,21 +194,165 @@ function updateBookshelfButtons(bookId) {
     }
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatWordCount(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '待补充';
+  if (!/^\d+$/.test(text)) return text;
+
+  const count = Number(text);
+  if (!Number.isFinite(count) || count <= 0) return '待补充';
+  if (count >= 100000000) return `${(count / 100000000).toFixed(1)} 亿字`;
+  if (count >= 10000) return `${(count / 10000).toFixed(1)} 万字`;
+  return `${count.toLocaleString('zh-CN')} 字`;
+}
+
+function formatScore(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score) || score <= 0) return '未评分';
+  return score.toFixed(1);
+}
+
+function formatCreationStatus(value) {
+  return Number(value) === 1 ? '已完结' : '连载中';
+}
+
+function formatGender(value) {
+  if (Number(value) === 1) return '男频';
+  if (Number(value) === 2) return '女频';
+  return '通用';
+}
+
+function formatTimestamp(value) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '待同步';
+
+  const date = new Date(timestamp * 1000);
+  if (Number.isNaN(date.getTime())) return '待同步';
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function getCurrentSourceName() {
+  return sourceSelect?.selectedOptions?.[0]?.textContent?.trim() || '当前书源';
+}
+
+function getBookMonogram(book) {
+  const text = String(book?.title || book?.author || '书').trim().replace(/\s+/g, '');
+  return escapeHtml(text.slice(0, 2) || '书');
+}
+
+function renderCoverFallback(book) {
+  return `
+    <div class="book-cover-placeholder">
+      <span class="book-cover-placeholder-mark">${getBookMonogram(book)}</span>
+      <span class="book-cover-placeholder-text">BOOK PROFILE</span>
+    </div>
+  `;
+}
+
 function renderBookDetail(book) {
   if (!book || !detailView) return;
 
+  const title = escapeHtml(book.title || '未命名书籍');
+  const author = escapeHtml(book.author || '未知作者');
+  const category = escapeHtml(book.category || '未分类');
+  const abstract = escapeHtml(book.abstract || '暂无简介');
+  const latestChapter = escapeHtml(book.last_chapter_title || '暂未获取章节信息');
+  const sourceName = escapeHtml(getCurrentSourceName());
+  const wordCount = escapeHtml(formatWordCount(book.word_count));
+  const score = escapeHtml(formatScore(book.score));
+  const status = formatCreationStatus(book.creation_status);
+  const statusClass = Number(book.creation_status) === 1 ? 'is-completed' : 'is-serial';
+  const gender = escapeHtml(formatGender(book.gender));
+  const updateTime = escapeHtml(formatTimestamp(book.last_update_time));
+  const bookId = escapeHtml(book.book_id || '-');
+  const coverUrl = String(book.cover_url || '').trim();
+  const safeCoverUrl = escapeHtml(coverUrl);
+
   detailView.className = 'book-detail';
   detailView.innerHTML = `
-    <div class="title">${book.title || "未命名书籍"}</div>
-    <div class="meta" style="font-size: 1rem;">${book.author || "未知作者"}</div>
-    <div class="chips" style="margin: 8px 0;">
-      <span class="chip">分类: ${book.category || "未分类"}</span>
-      <span class="chip">字数: ${book.word_count || "-"}</span>
-      <span class="chip">评分: ${book.score ?? 0}</span>
+    <div class="book-detail-hero">
+      <div class="book-cover ${coverUrl ? 'has-image' : 'is-fallback'}" aria-hidden="true">
+        ${coverUrl ? `
+          <img class="book-cover-image" src="${safeCoverUrl}" alt="${title} 封面">
+        ` : `
+          ${renderCoverFallback(book)}
+        `}
+      </div>
+
+      <div class="book-detail-main">
+        <div class="book-detail-kicker">作品档案</div>
+        <div class="book-detail-header">
+          <div class="book-detail-heading">
+            <div class="title">${title}</div>
+            <div class="book-detail-author">作者 · ${author}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-pill-row">
+        <span class="detail-status-badge ${statusClass}">${escapeHtml(status)}</span>
+        <span class="detail-pill">${sourceName}</span>
+        <span class="detail-pill">${category}</span>
+        <span class="detail-pill">${gender}</span>
+      </div>
+
+      <div class="detail-stat-grid">
+        <div class="detail-stat">
+          <span class="detail-stat-label">字数规模</span>
+          <strong>${wordCount}</strong>
+        </div>
+        <div class="detail-stat">
+          <span class="detail-stat-label">站内评分</span>
+          <strong>${score}</strong>
+        </div>
+        <div class="detail-stat">
+          <span class="detail-stat-label">更新日期</span>
+          <strong>${updateTime}</strong>
+        </div>
+      </div>
     </div>
-    <div class="meta" style="margin-bottom: 8px;">最新章节: ${book.last_chapter_title || "-"}</div>
-    <div style="line-height: 1.6; margin-top: auto; color: var(--text); background: rgba(255,255,255,0.4); padding: 12px; border-radius: 8px; border: 1px solid var(--line); font-size: 0.95rem; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis;" title="简介">${book.abstract || "暂无简介"}</div>
+
+    <section class="detail-facts">
+      <div class="detail-fact">
+        <span class="detail-fact-label">最新章节</span>
+        <strong>${latestChapter}</strong>
+      </div>
+      <div class="detail-fact">
+        <span class="detail-fact-label">书籍编号</span>
+        <strong class="detail-fact-id">${bookId}</strong>
+      </div>
+    </section>
+
+    <section class="detail-section">
+      <div class="detail-section-head">内容简介</div>
+      <p class="detail-section-body">${abstract}</p>
+    </section>
   `;
+
+  const coverImage = detailView.querySelector('.book-cover-image');
+  if (coverImage) {
+    coverImage.addEventListener('error', () => {
+      const coverContainer = coverImage.closest('.book-cover');
+      if (!coverContainer) return;
+      coverContainer.classList.remove('has-image');
+      coverContainer.classList.add('is-fallback');
+      coverContainer.innerHTML = renderCoverFallback(book);
+    }, { once: true });
+  }
 }
 
 function renderToc(payload) {

@@ -9,6 +9,7 @@
 #include "gui/user_paths.h"
 #include "source/host/host_api.h"
 #include "source/host/http_service.h"
+#include "source/js/js_plugin_runtime.h"
 #include "source/runtime/source_manager.h"
 #include <webview/webview.h>
 
@@ -16,7 +17,7 @@ namespace novel {
 
 class GuiAppRuntime {
 public:
-    void initialize();
+    void initialize(webview::webview& window);
     void navigate_frontend(webview::webview& window) const;
 
     const GuiPaths& paths() const { return paths_; }
@@ -30,6 +31,7 @@ private:
     GuiPaths                       paths_;
     std::shared_ptr<HttpService>   http_service_;
     std::shared_ptr<HostApi>       host_api_;
+    std::shared_ptr<JsPluginRuntime> plugin_runtime_;
     std::shared_ptr<SourceManager> source_manager_;
     std::shared_ptr<Database>      database_;
     std::shared_ptr<LibraryService> library_service_;

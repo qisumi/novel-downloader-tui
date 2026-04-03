@@ -1,5 +1,9 @@
 # 环境变量配置（含敏感信息，不提交）
 .env
+batch_api/.env
+batch_api/*.session.json
+batch_api/output/
+batch_api/__pycache__/
 
 # Ignore build artifacts and dependencies
 vcpkg_installed/

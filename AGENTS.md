@@ -4,13 +4,13 @@
 
 ## 项目概述
 
-**小说下载 GUI 工具** —— 一个基于 Windows WebView 的小说搜索、下载与导出工具，使用 C++20 编写。项目通过 **Lua 插件书源** 搜索、缓存小说内容，当前内置番茄小说与七猫小说书源，支持导出 EPUB/TXT。
+**小说下载 GUI 工具** —— 一个基于 Windows WebView 的小说搜索、下载与导出工具，使用 C++20 编写。项目通过 **JS 插件书源** 搜索、缓存小说内容，当前内置番茄小说与七猫小说书源，支持导出 EPUB/TXT。
 
 当前界面层不再是旧 TUI / WinUI，而是：
 
 - C++ GUI 宿主：负责初始化运行时、加载插件、暴露桥接 API、启动 WebView
 - 前端静态资源：位于 `src/gui/frontend/`
-- Lua 插件书源：位于 `plugins/`
+- JS 插件书源：位于 `plugins/`
 
 ## 当前核心功能
 
@@ -26,14 +26,13 @@
 
 | 组件 | 用途 | 头文件/目录 |
 |------|------|------------|
-| WebView | Windows GUI 宿主 | `<webview/webview.h>` |
+| WebView | Windows GUI 宿主 + JS 插件运行时 | `<webview/webview.h>` |
 | cpp-httplib | HTTP/HTTPS 网络请求 | `<httplib.h>` |
-| nlohmann/json | JSON 解析 / GUI bridge 数据交换 | `<nlohmann/json.hpp>` |
+| nlohmann/json | JSON 解析 / GUI bridge / JS 结果校验 | `<nlohmann/json.hpp>` |
 | SQLiteCpp | SQLite C++ 封装 | `<SQLiteCpp/SQLiteCpp.h>` |
 | tinyxml2 | EPUB XML 生成 | `<tinyxml2.h>` |
 | libzip | EPUB ZIP 打包 | `<zip.h>` |
 | OpenSSL | HTTPS 支持 | 系统库 |
-| Lua + LuaBridge3 | 脚本支持 | `<lua.hpp>`, `<LuaBridge/LuaBridge.h>` |
 | CLI11 | 保留依赖 | `<CLI/CLI.hpp>` |
 | spdlog | 日志 | `<spdlog/spdlog.h>` |
 | VCPKG | 依赖管理 | 默认全局包（保留 `vcpkg.json` 依赖声明） |
@@ -51,10 +50,10 @@ novel-downloader-tui/
 │   └── sync_resources.cmake   # GUI 前端/插件资源同步
 ├── plugins/
 │   ├── README.md
-│   ├── fanqie.lua
-│   ├── qimao.lua
+│   ├── fanqie.js
+│   ├── qimao.js
 │   └── _shared/
-│       └── common.lua
+│       └── common.js
 ├── reference/
 │   └── fanqie.json
 └── src/
@@ -64,9 +63,9 @@ novel-downloader-tui/
     │   └── book.h
     ├── source/
     │   ├── domain/             # 书源接口与错误模型
-    │   ├── host/               # Lua 插件宿主 API
-    │   ├── lua/                # Lua 运行时与插件适配层
-    │   └── runtime/            # 插件加载与书源管理
+    │   ├── host/               # C++ 插件宿主 API（HTTP / env / log）
+    │   ├── js/                 # WebView JS 运行时与插件适配层
+    │   └── runtime/            # 插件扫描与书源管理
     ├── application/
     │   ├── library_service.*
     │   ├── download_service.*
@@ -103,10 +102,10 @@ novel-downloader-tui/
 | 类型 | 风格 | 示例 |
 |------|------|------|
 | 命名空间 | 小写下划线 | `novel::` |
-| 类/结构体 | PascalCase | `SourceManager`, `GuiAppRuntime` |
+| 类/结构体 | PascalCase | `SourceManager`, `GuiAppRuntime`, `JsPluginRuntime` |
 | 函数/方法 | snake_case | `load_from_directory()`, `navigate_frontend()` |
 | 变量 | snake_case | `book_id`, `plugin_dir` |
-| 成员变量 | snake_case + 尾下划线 | `host_api_`, `runtime_` |
+| 成员变量 | snake_case + 尾下划线 | `host_api_`, `plugin_runtime_` |
 
 ### 代码风格
 
@@ -120,7 +119,20 @@ novel-downloader-tui/
 
 ### `src/source/runtime/source_manager.*`
 
-负责扫描 `plugins/`、加载 Lua 插件、维护当前书源。
+负责扫描 `plugins/`、注册 JS 模块、等待 WebView 内的 JS 插件 bootstrap 完成并维护当前书源。
+
+### `src/source/js/js_plugin_runtime.*`
+
+负责：
+
+- 向 WebView 注入 JS 插件运行时
+- 注册 `plugins/` 下的 JS 模块
+- 提供 CommonJS 风格 `require(...)`
+- 将插件方法调用转成 C++ <-> JS RPC
+
+### `src/source/js/js_book_source.*`
+
+负责将 JS 插件适配到 `IBookSource`，并校验 `manifest` / `Book` / `TocItem` / `Chapter` 返回结构。
 
 ### `src/gui/app_runtime.*`
 
@@ -129,8 +141,8 @@ novel-downloader-tui/
 - 解析 GUI 运行路径
 - 加载 `.env`
 - 初始化 logger
-- 初始化 `HostApi` / `SourceManager` / `Database` / 各应用服务
-- 启动时加载插件并选择当前书源
+- 初始化 `HostApi` / `JsPluginRuntime` / `SourceManager` / `Database` / 各应用服务
+- 启动时注册插件资源并配置首选书源
 
 ### `src/gui/bridge.*`
 
@@ -162,45 +174,45 @@ novel-downloader-tui/
 - 前端目录也会按类似方式回溯查找
 - 目标是兼容源码运行、输出目录运行、打包运行三种方式
 
-## Lua 插件约定
+## JS 插件约定
 
-插件位于 `plugins/`，需返回一个 table，并至少实现：
+插件位于 `plugins/`，是普通 CommonJS 风格 JS 模块，需通过 `module.exports` 导出对象，并至少实现：
 
-```lua
-return {
-    manifest = {
-        id = "fanqie",
-        name = "番茄小说",
-        version = "1.1.0",
-        required_envs = { "FANQIE_APIKEY" },
-        optional_envs = {},
-    },
-    configure = function() end,
-    search = function(keywords, page) end,
-    get_book_info = function(book_id) end,
-    get_toc = function(book_id) end,
-    get_chapter = function(book_id, item_id) end,
-}
+```js
+module.exports = {
+  manifest: {
+    id: "fanqie",
+    name: "番茄小说",
+    version: "1.1.0",
+    required_envs: ["FANQIE_APIKEY"],
+    optional_envs: [],
+  },
+  async configure() {},
+  async search(keywords, page) {},
+  async get_book_info(bookId) {},
+  async get_toc(bookId) {},
+  async get_chapter(bookId, itemId) {},
+};
 ```
 
 宿主 API：
 
-- `host.http_get(url)`
+- `host.http_get(url, headers?, timeoutSeconds?)`
 - `host.http_request({ method, url, headers?, body?, timeout_seconds? })`
-- `host.json_parse(text)`
-- `host.json_stringify(value)`
 - `host.url_encode(text)`
-- `host.env_get(name[, default])`
+- `host.env_get(name, defaultValue?)`
 - `host.config_error(message)`
 - `host.log_info(msg)` / `host.log_warn(msg)` / `host.log_error(msg)`
+
+共享模块通过 `require("_shared/common")` 复用；以下划线开头的路径段不会被当作书源候选插件加载。
 
 ## 构建与运行
 
 ### 常用构建
 
 ```powershell
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
 
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
@@ -230,8 +242,8 @@ cmake --build --preset windows-x64-release-static-msvc --target novel-downloader
 如果修改了：
 
 - `src/gui/frontend/*.html|js|css`
-- `plugins/*.lua`
-- `plugins/_shared/*.lua`
+- `plugins/*.js`
+- `plugins/_shared/*.js`
 
 应重新执行对应的 GUI build，确保输出目录资源更新。
 
@@ -241,7 +253,9 @@ cmake --build --preset windows-x64-release-static-msvc --target novel-downloader
 
 - 优先看 `novel-gui.log` 里的：
   - `Plugin load start`
+  - `Discovered JS module`
   - `Loaded source`
+  - `Failed to evaluate JS plugin`
   - `No valid source plugins found`
 
 ### 前端相关

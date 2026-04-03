@@ -4,8 +4,8 @@
 
 ```powershell
 Copy-Item .env.example .env
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
 cmake --list-presets
 ```
 
@@ -87,7 +87,7 @@ Get-ChildItem .\build\release-msvc\bin\Release\gui
 Get-ChildItem .\build\release-msvc\bin\Release\plugins
 ```
 
-如果只改了 `src\gui\frontend\` 或 `plugins\`，直接重新执行对应 `cmake --build --preset ... --target novel-downloader-gui` 即可。
+如果只改了 `src\gui\frontend\` 或 `plugins\*.js` / `plugins\_shared\*.js`，直接重新执行对应 `cmake --build --preset ... --target novel-downloader-gui` 即可。
 
 ## 前端开发期接入 dev server
 
@@ -120,7 +120,7 @@ Get-Content .\build\release-static-msvc\bin\Release\novel-gui.log -Tail 100
 ```powershell
 .\run.ps1 --update-clangd
 
-cmd /c "C:\PROGRA~1\MICROS~3\18\COMMUN~1\Common7\Tools\VsDevCmd.bat -arch=x64 -host_arch=x64 && cmake --fresh --preset windows-x64-debug-clangd && cmake --build --preset windows-x64-debug-clangd --target novel-sync-compile-commands"
+cmd /c "\"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe\" -latest -property installationPath > \"%TEMP%\\vs_install_path.txt\" && set /p VSINSTALL=<\"%TEMP%\\vs_install_path.txt\" && \"%VSINSTALL%\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 && cmake --fresh --preset windows-x64-debug-clangd && cmake --build --preset windows-x64-debug-clangd --target novel-sync-compile-commands"
 ```
 
 生成后检查：

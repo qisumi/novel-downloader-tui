@@ -1,7 +1,7 @@
 {
   "name": "novel-downloader",
   "version": "0.2.0",
-  "description": "小说下载与导出工具 —— 基于 Lua 插件、SQLite 的 C++ 核心能力层与 Windows WebView GUI 宿主",
+  "description": "小说下载与导出工具 —— 基于 JS 插件、SQLite 的 C++ 核心能力层与 Windows WebView GUI 宿主",
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c",
   "dependencies": [
     {
@@ -36,14 +36,6 @@
     {
       "name": "spdlog",
       "version>=": "1.13.0"
-    },
-    {
-      "name": "lua",
-      "version>=": "5.4.8"
-    },
-    {
-      "name": "luabridge3",
-      "version>=": "3.0-rc3"
     },
     {
       "name": "webview2",

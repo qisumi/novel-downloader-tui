@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -9,13 +10,14 @@
 
 namespace novel {
 
-class HostApi;
+class JsPluginRuntime;
 
 class SourceManager {
 public:
-    explicit SourceManager(std::shared_ptr<HostApi> host_api);
+    explicit SourceManager(std::shared_ptr<JsPluginRuntime> plugin_runtime);
 
     void load_from_directory(const std::string& plugin_dir);
+    void set_preferred_source(const std::string& source_id);
     std::vector<SourceInfo> list_sources() const;
     bool select_source(const std::string& source_id);
     std::shared_ptr<IBookSource> current_source() const;
@@ -23,9 +25,16 @@ public:
     void configure_current();
 
 private:
-    std::shared_ptr<HostApi>                   host_api_;
-    std::vector<std::shared_ptr<IBookSource>> sources_;
-    std::shared_ptr<IBookSource>              current_source_;
+    void ensure_ready() const;
+    bool select_source_unlocked(const std::string& source_id) const;
+
+    std::shared_ptr<JsPluginRuntime>             plugin_runtime_;
+    std::string                                  plugin_dir_;
+    mutable std::mutex                           mutex_;
+    mutable bool                                 initialized_ = false;
+    std::string                                  preferred_source_id_;
+    mutable std::vector<std::shared_ptr<IBookSource>> sources_;
+    mutable std::shared_ptr<IBookSource>         current_source_;
 };
 
 } // namespace novel

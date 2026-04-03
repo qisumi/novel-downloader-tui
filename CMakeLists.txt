@@ -37,8 +37,6 @@ find_package(libzip CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(Lua REQUIRED)
-find_path(LUABRIDGE3_INCLUDE_DIRS "luabridge3/LuaBridge/Array.h" REQUIRED)
 
 if (NOVEL_ENABLE_WEBVIEW_GUI)
     set(WEBVIEW_BUILD_AMALGAMATION OFF CACHE BOOL "" FORCE)
@@ -71,11 +69,9 @@ endif()
 # ── 源文件 ──────────────────────────────────────────────────────────────────
 set(COMMON_SOURCES
     src/source/host/http_service.cpp
-    src/source/host/json_bridge.cpp
     src/source/host/host_api.cpp
-    src/source/lua/lua_runtime.cpp
-    src/source/lua/lua_source_schema.cpp
-    src/source/lua/lua_book_source.cpp
+    src/source/js/js_plugin_runtime.cpp
+    src/source/js/js_book_source.cpp
     src/source/runtime/source_manager.cpp
 
     # Application Services
@@ -126,8 +122,6 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
 
     target_include_directories(${target_name} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${LUABRIDGE3_INCLUDE_DIRS}
-        ${LUA_INCLUDE_DIR}
     )
 
     target_link_libraries(${target_name} PRIVATE
@@ -140,8 +134,11 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
         OpenSSL::Crypto
         CLI11::CLI11
         spdlog::spdlog
-        ${LUA_LIBRARIES}
     )
+
+    if (NOVEL_ENABLE_WEBVIEW_GUI)
+        target_link_libraries(${target_name} PRIVATE webview::core)
+    endif()
 
     target_compile_definitions(${target_name} PRIVATE
         NOMINMAX

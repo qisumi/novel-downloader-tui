@@ -3,7 +3,28 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
-$vsDevCmd = "C:\PROGRA~1\MICROS~3\18\COMMUN~1\Common7\Tools\VsDevCmd.bat"
+function Find-VsDevCmd {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if (-not (Test-Path $vswhere)) {
+        throw "vswhere.exe not found: $vswhere"
+    }
+    $installPath = & $vswhere -latest -property installationPath 2>$null
+    if (-not $installPath) {
+        throw "No Visual Studio installation found via vswhere"
+    }
+    $devCmd = Join-Path $installPath "Common7\Tools\VsDevCmd.bat"
+    if (-not (Test-Path $devCmd) -and $installPath -match ' ') {
+        $short = New-Object -ComObject Scripting.FileSystemObject
+        $installPath = $short.GetFolder($installPath).ShortPath
+        $devCmd = Join-Path $installPath "Common7\Tools\VsDevCmd.bat"
+    }
+    if (-not (Test-Path $devCmd)) {
+        throw "VsDevCmd.bat not found at: $devCmd"
+    }
+    return $devCmd
+}
+
+$vsDevCmd = Find-VsDevCmd
 
 function Invoke-Step {
     param(
@@ -40,7 +61,19 @@ function Invoke-ClangdRefresh {
         throw "VsDevCmd.bat not found: $vsDevCmd"
     }
 
-    $command = "`"$vsDevCmd`" -arch=x64 -host_arch=x64 && cmake --fresh --preset windows-x64-debug-clangd && cmake --build --preset windows-x64-debug-clangd --target novel-sync-compile-commands"
+    $savedVcpkgRoot = $env:VCPKG_ROOT
+    if ([string]::IsNullOrWhiteSpace($savedVcpkgRoot)) {
+        throw "VCPKG_ROOT is not set. Please point it to your vcpkg root directory before running --update-clangd."
+    }
+
+    $toolchainFile = Join-Path $savedVcpkgRoot "scripts\buildsystems\vcpkg.cmake"
+    if (-not (Test-Path $toolchainFile)) {
+        throw "vcpkg toolchain file not found: $toolchainFile"
+    }
+
+    # Use cmd.exe's quoted SET form so the value does not accidentally capture
+    # the space before '&&' and become 'C:\vcpkg '.
+    $command = "call `"$vsDevCmd`" -arch=x64 -host_arch=x64 && set `"VCPKG_ROOT=$savedVcpkgRoot`" && cmake --fresh --preset windows-x64-debug-clangd && cmake --build --preset windows-x64-debug-clangd --target novel-sync-compile-commands"
     Invoke-Step "Refresh clangd compile database" { cmd /c $command }
 }
 

@@ -7,8 +7,11 @@
 
 namespace novel {
 
+// ── 匿名命名空间：内部辅助函数 ─────────────
+
 namespace {
 
+/// 从查询结果的固定列顺序中读取一本书的完整字段
 Book read_book(SQLite::Statement& stmt) {
     Book book;
     book.book_id = stmt.getColumn(0).getString();
@@ -26,6 +29,7 @@ Book read_book(SQLite::Statement& stmt) {
     return book;
 }
 
+/// 检查数据库中是否存在指定名称的表
 bool table_exists(SQLite::Database& db, const char* table_name) {
     SQLite::Statement stmt(
         db, "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1");
@@ -33,6 +37,7 @@ bool table_exists(SQLite::Database& db, const char* table_name) {
     return stmt.executeStep();
 }
 
+/// 检查指定表中是否包含某个列（用于判断旧版表结构）
 bool table_has_column(SQLite::Database& db, const char* table_name, const char* column_name) {
     if (!table_exists(db, table_name)) {
         return false;
@@ -49,16 +54,24 @@ bool table_has_column(SQLite::Database& db, const char* table_name, const char* 
 
 } // namespace
 
+// ── 构造函数 ─────────────
+
+/// 打开（或创建）数据库文件，设置 WAL 模式与外键约束，然后初始化表结构。
 Database::Database(const std::string& db_path)
     : db_(std::make_unique<SQLite::Database>(
           db_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)) {
-    db_->exec("PRAGMA journal_mode=WAL;");
-    db_->exec("PRAGMA synchronous=NORMAL;");
-    db_->exec("PRAGMA foreign_keys=ON;");
+    db_->exec("PRAGMA journal_mode=WAL;");      // 使用 WAL 模式提升并发读写性能
+    db_->exec("PRAGMA synchronous=NORMAL;");     // 在 WAL 模式下 NORMAL 已足够安全
+    db_->exec("PRAGMA foreign_keys=ON;");        // 启用外键约束，支持级联删除
     init_schema();
 }
 
+// ── 表结构初始化 ─────────────
+
+/// 创建 books / toc / chapters 三张表。
+/// 若检测到旧版（无 source_id 列）的表，则先删除旧表再重建。
 void Database::init_schema() {
+    // 判断是否存在缺少 source_id 列的旧版表
     bool legacy_schema =
         (table_exists(*db_, "books") && !table_has_column(*db_, "books", "source_id")) ||
         (table_exists(*db_, "toc") && !table_has_column(*db_, "toc", "source_id")) ||
@@ -66,6 +79,7 @@ void Database::init_schema() {
 
     if (legacy_schema) {
         spdlog::warn("Detected legacy database schema, rebuilding tables with source_id support");
+        // 旧表数据不兼容，直接清除重建
         db_->exec(R"(
             DROP TABLE IF EXISTS chapters;
             DROP TABLE IF EXISTS toc;
@@ -73,6 +87,9 @@ void Database::init_schema() {
         )");
     }
 
+    // books：书架主表，以 (source_id, book_id) 为主键
+    // toc：目录表，外键关联 books，删除书籍时级联删除目录
+    // chapters：章节缓存表，外键关联 books，删除书籍时级联删除章节
     db_->exec(R"(
         CREATE TABLE IF NOT EXISTS books (
             source_id        TEXT NOT NULL,
@@ -120,6 +137,9 @@ void Database::init_schema() {
     )");
 }
 
+// ── 书架操作 ─────────────
+
+/// 将书籍信息写入 books 表；若已存在则更新除 added_at 之外的全部字段。
 void Database::save_book(const std::string& source_id, const Book& book) {
     SQLite::Statement stmt(*db_,
         R"(INSERT INTO books
@@ -154,6 +174,8 @@ void Database::save_book(const std::string& source_id, const Book& book) {
     stmt.exec();
 }
 
+/// 从书架删除指定书籍（外键级联会自动删除对应的 toc 和 chapters）。
+/// @return 是否删除了一行
 bool Database::remove_book(const std::string& source_id, const std::string& book_id) {
     SQLite::Statement stmt(*db_, "DELETE FROM books WHERE source_id=? AND book_id=?");
     stmt.bind(1, source_id);
@@ -161,6 +183,7 @@ bool Database::remove_book(const std::string& source_id, const std::string& book
     return stmt.exec() > 0;
 }
 
+/// 列出指定书源的书架，按添加时间倒序。
 std::vector<Book> Database::list_bookshelf(const std::string& source_id) {
     std::vector<Book> books;
     SQLite::Statement stmt(*db_,
@@ -174,6 +197,7 @@ std::vector<Book> Database::list_bookshelf(const std::string& source_id) {
     return books;
 }
 
+/// 按 source_id + book_id 精确查询单本书。
 std::optional<Book> Database::get_book(const std::string& source_id, const std::string& book_id) {
     SQLite::Statement stmt(*db_,
         "SELECT book_id,title,author,cover_url,abstract,category,"
@@ -187,6 +211,7 @@ std::optional<Book> Database::get_book(const std::string& source_id, const std::
     return read_book(stmt);
 }
 
+/// 判断指定书籍是否已存在于书架。
 bool Database::is_in_bookshelf(const std::string& source_id, const std::string& book_id) {
     SQLite::Statement stmt(*db_,
         "SELECT 1 FROM books WHERE source_id=? AND book_id=? LIMIT 1");
@@ -195,17 +220,23 @@ bool Database::is_in_bookshelf(const std::string& source_id, const std::string& 
     return stmt.executeStep();
 }
 
+// ── 目录操作 ─────────────
+
+/// 保存书籍目录：在事务内先清除旧目录，再批量插入新条目。
+/// sort_order 字段用于保持原始目录顺序。
 void Database::save_toc(
     const std::string& source_id,
     const std::string& book_id,
     const std::vector<TocItem>& toc) {
     try {
         SQLite::Transaction tx(*db_);
+        // 先删除该书的旧目录
         SQLite::Statement del_stmt(*db_, "DELETE FROM toc WHERE source_id=? AND book_id=?");
         del_stmt.bind(1, source_id);
         del_stmt.bind(2, book_id);
         del_stmt.exec();
 
+        // 批量插入新目录条目
         SQLite::Statement stmt(*db_,
             "INSERT INTO toc(source_id,item_id,book_id,title,volume_name,word_count,update_time,sort_order) "
             "VALUES(?,?,?,?,?,?,?,?)");
@@ -218,7 +249,7 @@ void Database::save_toc(
             stmt.bind(5, item.volume_name);
             stmt.bind(6, item.word_count);
             stmt.bind(7, static_cast<std::int64_t>(item.update_time));
-            stmt.bind(8, i);
+            stmt.bind(8, i);            // sort_order：数组下标即顺序
             stmt.exec();
             stmt.reset();
             stmt.clearBindings();
@@ -231,6 +262,7 @@ void Database::save_toc(
     }
 }
 
+/// 获取书籍目录，按 sort_order 升序返回。
 std::vector<TocItem> Database::get_toc(const std::string& source_id, const std::string& book_id) {
     std::vector<TocItem> toc;
     SQLite::Statement stmt(*db_,
@@ -250,6 +282,7 @@ std::vector<TocItem> Database::get_toc(const std::string& source_id, const std::
     return toc;
 }
 
+/// 返回指定书籍的目录条目总数。
 int Database::toc_count(const std::string& source_id, const std::string& book_id) {
     SQLite::Statement stmt(*db_,
         "SELECT COUNT(*) FROM toc WHERE source_id=? AND book_id=?");
@@ -261,6 +294,9 @@ int Database::toc_count(const std::string& source_id, const std::string& book_id
     return 0;
 }
 
+// ── 章节缓存操作 ─────────────
+
+/// 保存单章内容到 chapters 表（INSERT OR REPLACE：已存在则覆盖）。
 void Database::save_chapter(
     const std::string& source_id,
     const std::string& book_id,
@@ -276,6 +312,7 @@ void Database::save_chapter(
     stmt.exec();
 }
 
+/// 按 source_id + item_id 获取已缓存的章节内容。
 std::optional<Chapter> Database::get_chapter(const std::string& source_id, const std::string& item_id) {
     SQLite::Statement stmt(*db_,
         "SELECT item_id,title,content FROM chapters WHERE source_id=? AND item_id=?");
@@ -291,6 +328,7 @@ std::optional<Chapter> Database::get_chapter(const std::string& source_id, const
     return chapter;
 }
 
+/// 判断指定章节是否已在本地缓存。
 bool Database::chapter_cached(const std::string& source_id, const std::string& item_id) {
     SQLite::Statement stmt(*db_,
         "SELECT 1 FROM chapters WHERE source_id=? AND item_id=? LIMIT 1");
@@ -299,6 +337,7 @@ bool Database::chapter_cached(const std::string& source_id, const std::string& i
     return stmt.executeStep();
 }
 
+/// 获取指定书籍已缓存的章节数量，用于计算下载进度。
 int Database::cached_chapter_count(const std::string& source_id, const std::string& book_id) {
     SQLite::Statement stmt(*db_,
         "SELECT COUNT(*) FROM chapters WHERE source_id=? AND book_id=?");

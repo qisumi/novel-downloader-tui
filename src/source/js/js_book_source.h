@@ -1,26 +1,17 @@
 #pragma once
 
-#include <lua.hpp>
-#include <luabridge3/LuaBridge/LuaBridge.h>
-
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "source/domain/book_source.h"
+#include "source/js/js_plugin_runtime.h"
 
 namespace novel {
 
-class LuaRuntime;
-
-class LuaBookSource : public IBookSource {
+class JsBookSource : public IBookSource {
 public:
-    LuaBookSource(
-        std::string plugin_path,
-        std::shared_ptr<LuaRuntime> runtime,
-        luabridge::LuaRef plugin_ref);
+    JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBootstrapPlugin& plugin);
 
     const SourceInfo& info() const override { return info_; }
     const SourceCapabilities& capabilities() const override { return capabilities_; }
@@ -35,15 +26,15 @@ public:
         const std::string& item_id) override;
 
 private:
-    void load_manifest();
-    luabridge::LuaRef require_function(const char* name);
+    void load_manifest(const nlohmann::json& manifest);
 
-    std::string                 plugin_path_;
-    std::shared_ptr<LuaRuntime> runtime_;
-    luabridge::LuaRef           plugin_ref_;
-    SourceInfo                  info_;
-    SourceCapabilities          capabilities_;
-    std::mutex                  mutex_;
+    std::string                      plugin_path_;
+    std::string                      module_id_;
+    std::shared_ptr<JsPluginRuntime> runtime_;
+    SourceInfo                       info_;
+    SourceCapabilities               capabilities_;
+    bool                             has_configure_ = false;
+    bool                             has_book_info_ = false;
 };
 
 } // namespace novel

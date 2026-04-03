@@ -1,55 +1,58 @@
 # 小说下载工具
 
-基于 C++20 与 Lua 插件书源的小说搜索、下载、缓存与导出工具。当前界面层为 Windows WebView GUI，核心能力由 C++ 服务层提供，内置 `fanqie` 与 `qimao` 两个书源，支持导出 EPUB / TXT。
+基于 C++20、Windows WebView GUI 和 JS 书源插件的小说搜索、下载、缓存与导出工具。核心能力仍由 C++ 服务层提供，书源脚本改为运行在 WebView 的 JS 插件运行时中，当前内置 `fanqie` 与 `qimao` 两个书源，支持导出 EPUB / TXT。
 
 ## 当前状态
 
 - 当前可运行形态：Windows WebView GUI `novel-downloader-gui.exe`
 - 核心能力：搜索、书源切换、目录获取、章节缓存、批量下载、EPUB/TXT 导出
-- 书源机制：运行时从 `plugins/` 加载 Lua 插件
+- 书源机制：运行时从 `plugins/` 加载 JS 插件
 - 当前构建：顶层 CMake 同时构建核心库 `novel-core` 与 GUI 宿主
 
 ## 核心能力
 
 | 能力 | 说明 |
 |------|------|
-| 搜索 | 通过 Lua 书源按书名或作者搜索 |
+| 搜索 | 通过 JS 书源按书名或作者搜索 |
 | 书源切换 | 加载并切换 `fanqie`、`qimao` 等插件书源 |
 | 目录获取 | 拉取并缓存章节目录 |
 | 章节缓存 | 使用 SQLite 缓存正文 |
 | 批量下载 | 按目录批量抓取章节 |
 | 导出 | 导出 EPUB / TXT |
-| 插件扩展 | 可新增 Lua 书源插件 |
+| 插件扩展 | 可新增 JS 书源插件 |
 
 ## 目录结构
 
 ```text
-fanqie-downloader-tui/
+novel-downloader-tui/
 ├── CMakeLists.txt
 ├── CMakePresets.json
 ├── README.md
 ├── QUICK_CMD.md
 ├── AGENTS.md
-├── .env.example
 ├── cmake/
 │   └── sync_resources.cmake   # GUI 前端/插件资源同步脚本
 ├── plugins/
-│   ├── fanqie.lua
-│   ├── qimao.lua
+│   ├── fanqie.js
+│   ├── qimao.js
 │   ├── README.md
 │   └── _shared/
+│       └── common.js
 ├── reference/
 │   └── fanqie.json
-├── src/
-│   ├── application/           # Library / Download / Export 服务
-│   ├── db/                    # SQLite 持久化
-│   ├── export/                # EPUB / TXT 导出
-│   ├── gui/                   # WebView GUI 宿主、桥接、前端静态资源
-│   ├── models/                # Book / TocItem / Chapter
-│   ├── source/                # 书源接口、Lua 运行时、宿主 API
-│   ├── dotenv.h
-│   └── logger.h
-└── vcpkg.json
+└── src/
+    ├── application/           # Library / Download / Export 服务
+    ├── db/                    # SQLite 持久化
+    ├── export/                # EPUB / TXT 导出
+    ├── gui/                   # WebView GUI 宿主、桥接、前端静态资源
+    ├── models/                # Book / TocItem / Chapter
+    ├── source/
+    │   ├── domain/            # 书源接口与错误模型
+    │   ├── host/              # C++ 宿主 API（HTTP / env / log）
+    │   ├── js/                # WebView JS 插件运行时与适配层
+    │   └── runtime/           # 插件扫描与书源管理
+    ├── dotenv.h
+    └── logger.h
 ```
 
 ## 依赖
@@ -98,8 +101,8 @@ NOVEL_GUI_DEV_SERVER=
 Debug：
 
 ```powershell
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog lua luabridge3 webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
 .\build\debug-msvc\bin\Debug\novel-downloader-gui.exe
@@ -134,7 +137,7 @@ cmake --build --preset windows-x64-debug-msvc --target novel-core
 GUI 依赖两类运行时资源：
 
 - `src/gui/frontend/` 下的前端静态文件
-- `plugins/` 下的 Lua 插件与共享脚本
+- `plugins/` 下的 JS 插件与共享脚本
 
 当前 CMake 会在构建 `novel-downloader-gui` 时自动同步这两类资源到目标输出目录：
 
@@ -165,6 +168,7 @@ GUI 日志默认写入项目运行目录下的 `novel-gui.log`。
 常见排查点：
 
 - 检查插件目录是否被正确解析
+- 检查 JS 插件是否成功完成 bootstrap
 - 检查 GUI 最终导航到的前端 URL
 - 检查输出目录下 `gui/` 与 `plugins/` 是否为最新文件
 
@@ -173,7 +177,7 @@ GUI 日志默认写入项目运行目录下的 `novel-gui.log`。
 ```powershell
 Get-Content .\novel-gui.log -Tail 100
 Get-ChildItem .\build\debug-msvc\bin\Debug\gui
-Get-ChildItem .\build\debug-msvc\bin\Debug\plugins
+Get-ChildItem .\build\debug-msvc\bin\Debug\plugins -Recurse
 ```
 
 ## 相关文档

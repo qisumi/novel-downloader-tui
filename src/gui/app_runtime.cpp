@@ -13,7 +13,7 @@
 
 namespace novel {
 
-void GuiAppRuntime::initialize()
+void GuiAppRuntime::initialize(webview::webview& window)
 {
     paths_ = resolve_gui_paths();
 
@@ -28,7 +28,9 @@ void GuiAppRuntime::initialize()
 
     http_service_ = std::make_shared<HttpService>();
     host_api_ = std::make_shared<HostApi>(http_service_);
-    source_manager_ = std::make_shared<SourceManager>(host_api_);
+    plugin_runtime_ = std::make_shared<JsPluginRuntime>(window, host_api_);
+    plugin_runtime_->install();
+    source_manager_ = std::make_shared<SourceManager>(plugin_runtime_);
     database_ = std::make_shared<Database>(paths_.db_path.string());
     library_service_ = std::make_shared<LibraryService>(source_manager_, database_);
     download_service_ = std::make_shared<DownloadService>(source_manager_, library_service_);
@@ -38,16 +40,10 @@ void GuiAppRuntime::initialize()
 
     if (const char* preferred_source = std::getenv("NOVEL_SOURCE")) {
         std::string source_id(preferred_source);
-        if (!source_id.empty() && source_manager_->select_source(source_id)) {
-            spdlog::info("Selected preferred source: {}", source_id);
+        if (!source_id.empty()) {
+            source_manager_->set_preferred_source(source_id);
+            spdlog::info("Preferred source configured: {}", source_id);
         }
-    }
-
-    try {
-        source_manager_->configure_current();
-    } catch (const SourceException& e) {
-        spdlog::warn("Current source is not fully configured yet: {}",
-                     format_source_error_log(e.error()));
     }
 }
 
