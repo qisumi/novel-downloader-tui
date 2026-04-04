@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches:
+      - master
       - main
     tags:
       - "v*"
@@ -33,7 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', env.RELEASE_TAG) || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', github.event.inputs.tag_name) || github.ref }}
 
       - name: Setup Visual Studio developer command prompt
         uses: ilammy/msvc-dev-cmd@v1

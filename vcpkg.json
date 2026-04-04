@@ -1,6 +1,6 @@
 {
   "name": "novel-downloader",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "小说下载与导出工具 —— 基于 JS 插件、SQLite 的 C++ 核心能力层与 Windows WebView GUI 宿主",
   "builtin-baseline": "e5a1490e1409d175932ef6014519e9ae149ddb7c",
   "dependencies": [
