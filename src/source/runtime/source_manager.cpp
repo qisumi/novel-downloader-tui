@@ -84,11 +84,9 @@ void SourceManager::load_from_directory(const std::string& plugin_dir) {
     std::vector<JsModule> plugins;
     for (const auto& entry : fs::recursive_directory_iterator(plugin_path)) {
         if (!entry.is_regular_file()) {
-            spdlog::debug("Skip non-file entry: {}", entry.path().string());
             continue;
         }
         if (entry.path().extension() != ".js") {
-            spdlog::debug("Skip non-js file: {}", entry.path().string());
             continue;
         }
 
@@ -100,7 +98,6 @@ void SourceManager::load_from_directory(const std::string& plugin_dir) {
         // 路径段以 _ 开头的模块视为私有共享模块，不作为书源候选
         module.is_plugin_candidate = !has_private_path_segment(relative_path);
 
-        spdlog::info("Discovered JS module: {} -> {}", module.module_id, module.plugin_path);
         modules.push_back(module);
         if (module.is_plugin_candidate) {
             plugins.push_back(module);
@@ -114,9 +111,6 @@ void SourceManager::load_from_directory(const std::string& plugin_dir) {
     std::sort(plugins.begin(), plugins.end(), [](const JsModule& lhs, const JsModule& rhs) {
         return lhs.module_id < rhs.module_id;
     });
-
-    spdlog::info("Plugin scan finished. module_count={}, candidate_count={}",
-                 modules.size(), plugins.size());
 
     // 至少需要一个书源候选插件
     if (plugins.empty()) {
@@ -244,7 +238,6 @@ void SourceManager::ensure_ready() const {
                 continue;
             }
 
-            spdlog::info("Loaded source '{}' from {}", source->info().id, plugin.plugin_path);
             loaded_sources.push_back(std::move(source));
         } catch (const SourceException& e) {
             spdlog::error("Failed to load plugin {}: {}",

@@ -74,7 +74,6 @@ void navigate_frontend(
     if (const char* dev_server = std::getenv("NOVEL_GUI_DEV_SERVER")) {
         std::string url(dev_server);
         if (!url.empty()) {
-            spdlog::info("GUI navigating to dev server frontend: {}", url);
             window.navigate(url);
             return;
         }
@@ -86,7 +85,6 @@ void navigate_frontend(
         throw std::runtime_error("GUI frontend entry not found: " + index_path.string());
     }
     const auto index_url = to_file_url(index_path);
-    spdlog::info("GUI navigating to frontend file: {}", index_url);
     window.navigate(index_url);
 }
 

@@ -513,27 +513,12 @@ std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const 
         return std::nullopt;
     }
 
-    spdlog::debug("HTTP {} {} | host={} path={} follow_redirects={}",
-                  method, request.url, url.scheme_host, url.path, request.follow_redirects);
-
     auto merged_headers = request.headers;
     attach_cookie_header(url.scheme, url.host, url.path, merged_headers);
 
     auto response = send_with_winhttp(request, url, method, merged_headers);
     if (!response) {
         return std::nullopt;
-    }
-
-    const auto location = std::find_if(
-        response->headers.begin(),
-        response->headers.end(),
-        [](const auto& header) { return normalize_header_name(header.first) == "location"; });
-    if (location != response->headers.end()) {
-        spdlog::debug("HTTP response {} {} -> status={} location={}",
-                      method, request.url, response->status, location->second);
-    } else {
-        spdlog::debug("HTTP response {} {} -> status={}",
-                      method, request.url, response->status);
     }
 
     store_response_cookies(url.host, url.path, response->headers);
@@ -591,8 +576,6 @@ void HttpService::attach_cookie_header(
     }
 
     if (matched_cookies.empty()) {
-        spdlog::debug("HTTP cookie attach skipped: scheme={} host={} path={} jar=<empty-or-no-match>",
-                      scheme, host, request_path);
         return;
     }
 
@@ -626,15 +609,11 @@ void HttpService::attach_cookie_header(
                 value += "; ";
             }
             value += jar_value;
-            spdlog::debug("HTTP cookie attach merged: scheme={} host={} path={} cookies={}",
-                          scheme, host, request_path, format_cookie_descriptors(matched_cookies));
             return;
         }
     }
 
     headers.emplace_back("Cookie", jar_value);
-    spdlog::debug("HTTP cookie attach: scheme={} host={} path={} cookies={}",
-                  scheme, host, request_path, format_cookie_descriptors(matched_cookies));
 }
 
 void HttpService::store_response_cookies(
@@ -648,14 +627,10 @@ void HttpService::store_response_cookies(
         }
 
         const auto raw_cookies = split_set_cookie_header_values(value);
-        spdlog::debug("HTTP set-cookie received: host={} path={} raw_count={} header={}",
-                      host, request_path_without_query(path), raw_cookies.size(), truncate_for_log(value));
 
         for (const auto& raw_cookie : raw_cookies) {
             const auto cookie = parse_set_cookie(host, path, raw_cookie);
             if (!cookie || cookie->name.empty() || cookie->domain.empty()) {
-                spdlog::debug("HTTP set-cookie ignored: host={} path={} raw={}",
-                              host, request_path_without_query(path), truncate_for_log(raw_cookie));
                 continue;
             }
 
@@ -672,8 +647,6 @@ void HttpService::store_response_cookies(
                 if (it != cookies_.end()) {
                     cookies_.erase(it);
                 }
-                spdlog::debug("HTTP cookie cleared: {}@{}{}",
-                              cookie->name, cookie->domain, cookie->path);
                 continue;
             }
 
@@ -682,12 +655,8 @@ void HttpService::store_response_cookies(
             } else {
                 cookies_.push_back(*cookie);
             }
-            spdlog::debug("HTTP cookie stored: {}@{}{} secure={}",
-                          cookie->name, cookie->domain, cookie->path, cookie->secure);
         }
     }
-
-    spdlog::debug("HTTP cookie jar snapshot: {}", format_cookie_descriptors(cookies_));
 }
 
 std::string url_encode(const std::string& value) {

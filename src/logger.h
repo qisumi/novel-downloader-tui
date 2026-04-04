@@ -35,8 +35,6 @@ inline void init_logger(const std::string& log_file = "novel.log",
 
     spdlog::set_default_logger(logger);
     spdlog::flush_every(std::chrono::seconds(1));
-
-    spdlog::info("Logger initialized. Log file: {}", log_file);
 }
 
 } // namespace novel

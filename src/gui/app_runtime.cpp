@@ -88,7 +88,6 @@ void GuiAppRuntime::initialize(webview::webview& window)
         std::string source_id(preferred_source);
         if (!source_id.empty()) {
             source_manager_->set_preferred_source(source_id);
-            spdlog::info("Preferred source configured: {}", source_id);
         }
     }
 }

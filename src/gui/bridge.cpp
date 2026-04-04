@@ -147,8 +147,6 @@ window.app = {
         std::scoped_lock lock(core_mutex_);
         const auto current = runtime_.source_manager()->current_info();
         const auto sources = runtime_.source_manager()->list_sources();
-        spdlog::info("native_get_sources called. source_count={}, current_source='{}'",
-                     sources.size(), current ? current->id : "");
         json items = json::array();
         for (const auto& source : sources) {
             items.push_back(source_to_json(source, current && current->id == source.id));
