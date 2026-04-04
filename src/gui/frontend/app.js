@@ -244,6 +244,12 @@ function renderCoverFallback(book) {
   return `<div class="book-cover-placeholder"><span class="book-cover-placeholder-mark">${getBookMonogram(book)}</span><span class="book-cover-placeholder-text">BOOK PROFILE</span></div>`;
 }
 
+function createTaskCoverFallbackElement(detail) {
+  const fallback = document.createElement('div');
+  fallback.className = 'task-cover-fallback';
+  fallback.innerHTML = getBookMonogram(detail);
+  return fallback;
+}
 function renderBookDetail(book) {
   if (!book || !detailView) return;
   const e = escapeHtml;
@@ -307,6 +313,8 @@ function renderToc(payload) {
 
 // ── Task management (simplified) ─────────────
 
+const taskElements = new Map();
+
 function getTaskStateClass(stage) {
   if (stage === 'failed') return 'is-failed';
   if (stage === 'finished') return 'is-finished';
@@ -314,30 +322,167 @@ function getTaskStateClass(stage) {
   return 'is-active';
 }
 
-function renderTaskItem(detail) {
+function getTaskHeading(detail) {
+  return `${TASK_KIND_LABELS[detail.kind] || detail.kind || '任务'} · ${TASK_STAGE_LABELS[detail.stage] || detail.stage || '处理中'}`;
+}
+
+function getTaskMeta(detail) {
   const progress = Number.isFinite(detail.current) && Number.isFinite(detail.total) ? `${detail.current}/${detail.total}` : '';
-  const meta = detail.error_message || progress || (detail.format ? `格式：${String(detail.format).toUpperCase()}` : '') || (detail.optimistic ? '等待开始...' : '');
+  return detail.error_message || progress || (detail.format ? `格式：${String(detail.format).toUpperCase()}` : '') || (detail.optimistic ? '等待开始...' : '');
+}
+
+function getTaskTitle(detail) {
+  return String(detail.title || detail.book_id || '任务进行中');
+}
+
+function createTaskEmptyState() {
+  const empty = document.createElement('div');
+  empty.className = 'empty-state';
+  empty.style.padding = '24px';
+  empty.textContent = '当前没有进行中的任务';
+  return empty;
+}
+
+function createTaskCoverImage(detail, coverUrl) {
+  const image = document.createElement('img');
+  image.className = 'task-cover-image';
+  image.alt = '封面';
+  image.src = coverUrl;
+  image.dataset.title = getTaskTitle(detail);
+  image.dataset.author = String(detail.author || '');
+  image.addEventListener('error', () => {
+    const container = image.closest('.task-cover');
+    if (!container) return;
+    container.classList.add('is-fallback');
+    container.replaceChildren(createTaskCoverFallbackElement({
+      title: image.dataset.title || '',
+      author: image.dataset.author || '',
+    }));
+  }, { once: true });
+  return image;
+}
+
+function updateTaskCover(container, detail) {
+  if (!container) return;
   const coverUrl = String(detail.cover_url || '').trim();
-  const coverMarkup = coverUrl
-    ? `<img class="task-cover-image" src="${escapeHtml(coverUrl)}" alt="封面">`
-    : `<div class="task-cover-fallback">${getBookMonogram(detail)}</div>`;
-  return `<div class="task-item ${getTaskStateClass(detail.stage)}"><div class="task-layout">
-    <div class="task-cover">${coverMarkup}</div>
+  const title = getTaskTitle(detail);
+  const author = String(detail.author || '');
+  const currentImage = container.querySelector('.task-cover-image');
+  const currentFallback = container.querySelector('.task-cover-fallback');
+
+  if (!coverUrl) {
+    container.classList.add('is-fallback');
+    if (!currentFallback || currentImage || currentFallback.innerHTML !== getBookMonogram(detail)) {
+      container.replaceChildren(createTaskCoverFallbackElement(detail));
+    }
+    return;
+  }
+
+  container.classList.remove('is-fallback');
+  if (currentImage) {
+    if (currentImage.getAttribute('src') !== coverUrl) currentImage.setAttribute('src', coverUrl);
+    if (currentImage.dataset.title !== title) currentImage.dataset.title = title;
+    if (currentImage.dataset.author !== author) currentImage.dataset.author = author;
+    return;
+  }
+
+  container.replaceChildren(createTaskCoverImage(detail, coverUrl));
+}
+
+function createTaskElement(detail) {
+  const item = document.createElement('div');
+  item.innerHTML = `<div class="task-layout">
+    <div class="task-cover"></div>
     <div class="task-content">
-      <strong>${TASK_KIND_LABELS[detail.kind] || detail.kind || '任务'} · ${TASK_STAGE_LABELS[detail.stage] || detail.stage || '处理中'}</strong>
-      <div class="task-title">${escapeHtml(detail.title || detail.book_id || '任务进行中')}</div>
-      ${detail.book_id ? `<div class="task-subtitle">${escapeHtml(detail.book_id)}</div>` : ''}
-      ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ''}
-    </div></div></div>`;
+      <strong class="task-heading"></strong>
+      <div class="task-title"></div>
+      <div class="task-subtitle"></div>
+      <div class="meta task-meta"></div>
+    </div></div>`;
+  updateTaskElement(item, detail);
+  return item;
+}
+
+function updateTaskElement(item, detail) {
+  if (!item) return;
+  item.className = `task-item ${getTaskStateClass(detail.stage)}`;
+  item.dataset.taskId = String(detail.task_id || '');
+
+  const heading = item.querySelector('.task-heading');
+  const title = item.querySelector('.task-title');
+  const subtitle = item.querySelector('.task-subtitle');
+  const meta = item.querySelector('.task-meta');
+
+  if (heading) heading.textContent = getTaskHeading(detail);
+  if (title) title.textContent = getTaskTitle(detail);
+  if (subtitle) {
+    const subtitleText = String(detail.book_id || '');
+    subtitle.textContent = subtitleText;
+    subtitle.hidden = !subtitleText;
+  }
+  if (meta) {
+    const metaText = getTaskMeta(detail);
+    meta.textContent = metaText;
+    meta.hidden = !metaText;
+  }
+
+  updateTaskCover(item.querySelector('.task-cover'), detail);
+}
+
+function findTaskElement(taskId) {
+  return taskElements.get(String(taskId || '')) || null;
+}
+
+function syncTaskElement(detail, previousTaskId = '') {
+  if (!taskFeed) return;
+
+  const taskId = String(detail.task_id || '');
+  const oldTaskId = String(previousTaskId || '');
+  let item = (oldTaskId && findTaskElement(oldTaskId)) || findTaskElement(taskId);
+
+  if (!item) {
+    item = createTaskElement(detail);
+    taskElements.set(taskId, item);
+    const emptyState = taskFeed.querySelector('.empty-state');
+    if (emptyState) {
+      taskFeed.replaceChildren(item);
+    } else {
+      taskFeed.prepend(item);
+    }
+    return;
+  }
+
+  updateTaskElement(item, detail);
+  if (oldTaskId && oldTaskId !== taskId) {
+    taskElements.delete(oldTaskId);
+  }
+  taskElements.set(taskId, item);
+}
+
+function removeTaskElement(taskId) {
+  const key = String(taskId || '');
+  const item = findTaskElement(key);
+  if (item) item.remove();
+  taskElements.delete(key);
+  if (taskFeed && !taskFeed.querySelector('.task-item')) {
+    taskFeed.replaceChildren(createTaskEmptyState());
+  }
 }
 
 function renderAllTasks() {
   if (!taskFeed) return;
+  taskElements.clear();
   if (!state.tasks.length) {
-    taskFeed.innerHTML = '<div class="empty-state" style="padding: 24px;">当前没有进行中的任务</div>';
+    taskFeed.replaceChildren(createTaskEmptyState());
     return;
   }
-  taskFeed.innerHTML = state.tasks.map(t => renderTaskItem(t)).join('');
+  const fragment = document.createDocumentFragment();
+  state.tasks.forEach((task) => {
+    const item = createTaskElement(task);
+    taskElements.set(String(task.task_id || ''), item);
+    fragment.append(item);
+  });
+  taskFeed.replaceChildren(fragment);
 }
 
 function findTask(predicate) {
@@ -350,19 +495,28 @@ function findTask(predicate) {
 function upsertTask(detail) {
   if (!detail || typeof detail !== 'object') return;
   const taskId = String(detail.task_id || `${detail.kind || 'task'}-${Date.now()}`);
-  const merged = { ...detail, task_id: taskId, optimistic: detail.optimistic ?? taskId.startsWith('pending-'), updated_at: Date.now() };
-
   let idx = findTask((t) => t.task_id === taskId);
   if (idx < 0) idx = findTask((t) => t.optimistic && t.kind === detail.kind && t.book_id === detail.book_id);
+  const current = idx >= 0 ? state.tasks[idx] : null;
+  const previousTaskId = current?.task_id ? String(current.task_id) : '';
+  const merged = {
+    ...(current || {}),
+    ...detail,
+    task_id: taskId,
+    optimistic: detail.optimistic ?? taskId.startsWith('pending-'),
+    updated_at: Date.now(),
+  };
   if (idx >= 0) {
-    state.tasks[idx] = { ...state.tasks[idx], ...merged };
+    state.tasks[idx] = merged;
   } else {
     state.tasks.unshift(merged);
   }
-  while (state.tasks.length > 20) state.tasks.pop();
-  renderAllTasks();
+  while (state.tasks.length > 20) {
+    const removed = state.tasks.pop();
+    removeTaskElement(removed?.task_id);
+  }
+  syncTaskElement(merged, previousTaskId);
 }
-
 function createOptimisticTask(kind, book, extra = {}) {
   const taskId = `pending-${kind}-${Date.now()}`;
   upsertTask({ task_id: taskId, kind, stage: 'queued', book_id: book?.book_id || '', title: book?.title || '', cover_url: book?.cover_url || '', optimistic: true, ...extra });
@@ -539,3 +693,4 @@ async function bootstrap() {
 }
 
 bootstrap();
+
