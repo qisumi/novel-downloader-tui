@@ -27,12 +27,11 @@
 | 组件 | 用途 | 头文件/目录 |
 |------|------|------------|
 | WebView | Windows GUI 宿主 + JS 插件运行时 | `<webview/webview.h>` |
-| cpp-httplib | HTTP/HTTPS 网络请求 | `<httplib.h>` |
+| WinHTTP | HTTP/HTTPS 网络请求 | `<winhttp.h>` |
 | nlohmann/json | JSON 解析 / GUI bridge / JS 结果校验 | `<nlohmann/json.hpp>` |
 | SQLiteCpp | SQLite C++ 封装 | `<SQLiteCpp/SQLiteCpp.h>` |
 | tinyxml2 | EPUB XML 生成 | `<tinyxml2.h>` |
 | libzip | EPUB ZIP 打包 | `<zip.h>` |
-| OpenSSL | HTTPS 支持 | 系统库 |
 | CLI11 | 保留依赖 | `<CLI/CLI.hpp>` |
 | spdlog | 日志 | `<spdlog/spdlog.h>` |
 | VCPKG | 依赖管理 | 默认全局包（保留 `vcpkg.json` 依赖声明） |
@@ -211,8 +210,8 @@ module.exports = {
 ### 常用构建
 
 ```powershell
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
 
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui

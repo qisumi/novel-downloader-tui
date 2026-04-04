@@ -31,10 +31,8 @@ add_compile_options("$<$<COMPILE_LANGUAGE:C>:/utf-8>" "$<$<COMPILE_LANGUAGE:CXX>
 # ── 依赖 ────────────────────────────────────────────────────────────────────
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(SQLiteCpp CONFIG REQUIRED)
-find_package(httplib CONFIG REQUIRED)
 find_package(tinyxml2 CONFIG REQUIRED)
 find_package(libzip CONFIG REQUIRED)
-find_package(OpenSSL REQUIRED)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 
@@ -127,11 +125,8 @@ foreach(target_name IN LISTS NOVEL_NATIVE_TARGETS)
     target_link_libraries(${target_name} PRIVATE
         nlohmann_json::nlohmann_json
         SQLiteCpp
-        httplib::httplib
         tinyxml2::tinyxml2
         libzip::zip
-        OpenSSL::SSL
-        OpenSSL::Crypto
         CLI11::CLI11
         spdlog::spdlog
     )

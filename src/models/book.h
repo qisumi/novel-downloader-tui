@@ -1,39 +1,80 @@
 #pragma once
+
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
 namespace novel {
 
-/// 书籍基本信息（搜索结果 / 书架条目）
 struct Book {
-    std::string book_id;          ///< 书籍唯一标识
-    std::string title;            ///< 书名
-    std::string author;           ///< 作者
-    std::string cover_url;        ///< 封面图片地址
-    std::string abstract;         ///< 简介/摘要
-    std::string category;         ///< 分类（如"玄幻"、"言情"）
-    std::string word_count;       ///< 字数（字符串形式，兼容不同格式）
-    double      score          = 0.0;  ///< 评分
-    int         gender         = 0;   ///< 频道性别标签：0=未知 1=男频 2=女频
-    int         creation_status= 0;   ///< 连载状态：0=连载 1=完结
-    std::string last_chapter_title;   ///< 最新章节标题
-    int64_t     last_update_time = 0; ///< 最后更新时间（Unix 时间戳）
+    std::string book_id;
+    std::string title;
+    std::string author;
+    std::string cover_url;
+    std::string abstract;
+    std::string category;
+    std::string word_count;
+    double      score          = 0.0;
+    int         gender         = 0;
+    int         creation_status= 0;
+    std::string last_chapter_title;
+    int64_t     last_update_time = 0;
 };
 
-/// 目录条目（单章）
+inline void to_json(nlohmann::json& j, const Book& book) {
+    j = nlohmann::json{
+        {"book_id", book.book_id},
+        {"title", book.title},
+        {"author", book.author},
+        {"cover_url", book.cover_url},
+        {"abstract", book.abstract},
+        {"category", book.category},
+        {"word_count", book.word_count},
+        {"score", book.score},
+        {"gender", book.gender},
+        {"creation_status", book.creation_status},
+        {"last_chapter_title", book.last_chapter_title},
+        {"last_update_time", book.last_update_time},
+    };
+}
+
+inline void from_json(const nlohmann::json& j, Book& book) {
+    book.book_id            = j.value("book_id", "");
+    book.title              = j.value("title", "");
+    book.author             = j.value("author", "");
+    book.cover_url          = j.value("cover_url", "");
+    book.abstract           = j.value("abstract", "");
+    book.category           = j.value("category", "");
+    book.word_count         = j.value("word_count", "");
+    book.score              = j.value("score", 0.0);
+    book.gender             = j.value("gender", 0);
+    book.creation_status    = j.value("creation_status", 0);
+    book.last_chapter_title = j.value("last_chapter_title", "");
+    book.last_update_time   = j.value("last_update_time", static_cast<std::int64_t>(0));
+}
+
 struct TocItem {
-    std::string item_id;          ///< 章节唯一标识
-    std::string title;            ///< 章节标题
-    std::string volume_name;      ///< 所属卷名
-    int         word_count  = 0;  ///< 本章字数
-    int64_t     update_time = 0;  ///< 本章更新时间（Unix 时间戳）
+    std::string item_id;
+    std::string title;
+    std::string volume_name;
+    int         word_count  = 0;
+    int64_t     update_time = 0;
 };
 
-/// 章节正文
+inline void to_json(nlohmann::json& j, const TocItem& item) {
+    j = nlohmann::json{
+        {"item_id", item.item_id},
+        {"title", item.title},
+        {"volume_name", item.volume_name},
+        {"word_count", item.word_count},
+        {"update_time", item.update_time},
+    };
+}
+
 struct Chapter {
-    std::string item_id;          ///< 章节唯一标识
-    std::string title;            ///< 章节标题
-    std::string content;          ///< 已解密的纯文本正文
+    std::string item_id;
+    std::string title;
+    std::string content;
 };
 
 } // namespace novel

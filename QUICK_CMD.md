@@ -4,8 +4,8 @@
 
 ```powershell
 Copy-Item .env.example .env
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
 cmake --list-presets
 ```
 

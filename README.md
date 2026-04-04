@@ -101,8 +101,8 @@ NOVEL_GUI_DEV_SERVER=
 Debug：
 
 ```powershell
-vcpkg install --triplet x64-windows nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
-vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp 'cpp-httplib[openssl]' tinyxml2 libzip openssl cli11 spdlog webview2
+vcpkg install --triplet x64-windows nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
+vcpkg install --triplet x64-windows-static nlohmann-json sqlitecpp tinyxml2 libzip cli11 spdlog webview2
 cmake --preset windows-x64-debug-msvc
 cmake --build --preset windows-x64-debug-msvc --target novel-downloader-gui
 .\build\debug-msvc\bin\Debug\novel-downloader-gui.exe

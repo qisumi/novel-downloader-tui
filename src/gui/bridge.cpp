@@ -60,51 +60,25 @@ json capabilities_to_json(const IBookSource& source)
 /// 将 Book 转换为 JSON 对象
 json book_to_json(const Book& book)
 {
-    return {
-        {"book_id", book.book_id},
-        {"title", book.title},
-        {"author", book.author},
-        {"cover_url", book.cover_url},
-        {"abstract", book.abstract},
-        {"category", book.category},
-        {"word_count", book.word_count},
-        {"score", book.score},
-        {"gender", book.gender},
-        {"creation_status", book.creation_status},
-        {"last_chapter_title", book.last_chapter_title},
-        {"last_update_time", book.last_update_time},
-    };
+    json j;
+    to_json(j, book);
+    return j;
 }
 
 /// 将 TocItem 转换为 JSON 对象
 json toc_to_json(const TocItem& item, bool cached)
 {
-    return {
-        {"item_id", item.item_id},
-        {"title", item.title},
-        {"volume_name", item.volume_name},
-        {"word_count", item.word_count},
-        {"update_time", item.update_time},
-        {"cached", cached},
-    };
+    json j;
+    to_json(j, item);
+    j["cached"] = cached;
+    return j;
 }
 
 /// 将 JSON 对象转换为 Book 结构体
 Book json_to_book(const json& payload)
 {
     Book book;
-    book.book_id = payload.value("book_id", "");
-    book.title = payload.value("title", "");
-    book.author = payload.value("author", "");
-    book.cover_url = payload.value("cover_url", "");
-    book.abstract = payload.value("abstract", "");
-    book.category = payload.value("category", "");
-    book.word_count = payload.value("word_count", "");
-    book.score = payload.value("score", 0.0);
-    book.gender = payload.value("gender", 0);
-    book.creation_status = payload.value("creation_status", 0);
-    book.last_chapter_title = payload.value("last_chapter_title", "");
-    book.last_update_time = payload.value("last_update_time", static_cast<std::int64_t>(0));
+    from_json(payload, book);
     return book;
 }
 
@@ -116,14 +90,32 @@ std::string next_task_label(std::atomic_uint64_t& counter, std::string_view pref
     return oss.str();
 }
 
+json make_task_event(
+    const std::string& task_id,
+    const std::string& kind,
+    const std::string& stage,
+    const Book& book,
+    std::initializer_list<std::pair<std::string, json>> extra = {})
+{
+    json payload{
+        {"task_id", task_id},
+        {"kind", kind},
+        {"stage", stage},
+        {"book_id", book.book_id},
+        {"title", book.title},
+        {"cover_url", book.cover_url},
+    };
+    for (const auto& [k, v] : extra) {
+        payload[k] = v;
+    }
+    return payload;
+}
+
 } // namespace
 
 GuiBridge::GuiBridge(webview::webview& window, GuiAppRuntime& runtime)
     : window_(window), runtime_(runtime) {}
 
-/// 安装所有 JS 绑定
-///
-/// 先注入 window.app 命名空间定义，然后逐个注册各 API 的 native 实现
 void GuiBridge::install()
 {
     // 注入前端桥接层初始化脚本
@@ -286,46 +278,27 @@ window.app = {
         }
 
         const std::string task_id = next_task_label(next_task_id_, "download");
-        emit_event("task", {
-            {"task_id", task_id},
-            {"kind", "download"},
-            {"stage", "started"},
-            {"book_id", book.book_id},
-            {"title", book.title},
-            {"cover_url", book.cover_url},
-        });
+        emit_event("task", make_task_event(task_id, "download", "started", book));
 
         std::scoped_lock lock(core_mutex_);
         const auto source = runtime_.source_manager()->current_source();
         const auto progress_stage = (source->capabilities().supports_batch
                                      && (!source->capabilities().supports_login || source->is_logged_in()))
-                                        ? "batch_progress"
-                                        : "chapter_progress";
+                                         ? "batch_progress"
+                                         : "chapter_progress";
         const auto toc = runtime_.library_service()->load_toc(book, false);
         runtime_.download_service()->download_book(
             book, toc,
             [&](int current, int total) {
-                emit_event("task", {
-                    {"task_id", task_id},
-                    {"kind", "download"},
-                    {"stage", progress_stage},
-                    {"book_id", book.book_id},
-                    {"title", book.title},
-                    {"cover_url", book.cover_url},
+                emit_event("task", make_task_event(task_id, "download", progress_stage, book, {
                     {"current", current},
                     {"total", total},
-                });
+                }));
             });
 
-        emit_event("task", {
-            {"task_id", task_id},
-            {"kind", "download"},
-            {"stage", "finished"},
-            {"book_id", book.book_id},
-            {"title", book.title},
-            {"cover_url", book.cover_url},
+        emit_event("task", make_task_event(task_id, "download", "finished", book, {
             {"total", static_cast<int>(toc.size())},
-        });
+        }));
 
         return make_success({
             {"task_id", task_id},
@@ -356,15 +329,9 @@ window.app = {
         }
 
         const std::string task_id = next_task_label(next_task_id_, "export");
-        emit_event("task", {
-            {"task_id", task_id},
-            {"kind", "export"},
-            {"stage", "started"},
-            {"book_id", book.book_id},
-            {"title", book.title},
-            {"cover_url", book.cover_url},
+        emit_event("task", make_task_event(task_id, "export", "started", book, {
             {"format", format},
-        });
+        }));
 
         std::scoped_lock lock(core_mutex_);
         const auto toc = runtime_.library_service()->load_toc(book, false);
@@ -377,42 +344,24 @@ window.app = {
             as_epub,
             path_to_utf8(exports_dir),
             [&](int current, int total) {
-                emit_event("task", {
-                    {"task_id", task_id},
-                    {"kind", "export"},
-                    {"stage", "prepare"},
-                    {"book_id", book.book_id},
-                    {"title", book.title},
-                    {"cover_url", book.cover_url},
+                emit_event("task", make_task_event(task_id, "export", "prepare", book, {
                     {"format", format},
                     {"current", current},
                     {"total", total},
-                });
+                }));
             },
             [&](int current, int total) {
-                emit_event("task", {
-                    {"task_id", task_id},
-                    {"kind", "export"},
-                    {"stage", "write"},
-                    {"book_id", book.book_id},
-                    {"title", book.title},
-                    {"cover_url", book.cover_url},
+                emit_event("task", make_task_event(task_id, "export", "write", book, {
                     {"format", format},
                     {"current", current},
                     {"total", total},
-                });
+                }));
             });
 
-        emit_event("task", {
-            {"task_id", task_id},
-            {"kind", "export"},
-            {"stage", "finished"},
-            {"book_id", book.book_id},
-            {"title", book.title},
-            {"cover_url", book.cover_url},
+        emit_event("task", make_task_event(task_id, "export", "finished", book, {
             {"path", output_path},
             {"format", format},
-        });
+        }));
 
         return make_success({
             {"task_id", task_id},

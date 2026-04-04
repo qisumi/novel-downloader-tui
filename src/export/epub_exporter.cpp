@@ -208,17 +208,7 @@ static bool zip_add_str(zip_t* za,
     return true;
 }
 
-static bool zip_add_blob(zip_t* za,
-                         const std::string& path,
-                         const std::string& content) {
-    zip_source_t* src = zip_source_from_string_copy(za, content);
-    if (!src) return false;
-    if (zip_file_add(za, path.c_str(), src, ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8) < 0) {
-        zip_source_free(src);
-        return false;
-    }
-    return true;
-}
+
 
 // ──────────────────────────────────────────────────────────────────────────────
 // mimetype（必须是 EPUB 首个文件，且不压缩）
@@ -516,7 +506,7 @@ std::string EpubExporter::export_book(const Book& book,
         return {};
     }
     if (opts.has_cover_image()
-        && !zip_add_blob(za, "OEBPS/" + opts.cover_image_filename, opts.cover_image_data)) {
+        && !zip_add_str(za, "OEBPS/" + opts.cover_image_filename, opts.cover_image_data)) {
         zip_discard(za);
         return {};
     }

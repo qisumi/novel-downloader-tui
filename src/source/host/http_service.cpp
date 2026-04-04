@@ -1,8 +1,6 @@
 #include "source/host/http_service.h"
 
-#include <httplib.h>
 #include <spdlog/spdlog.h>
-
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
@@ -20,19 +18,14 @@ namespace novel {
 
 namespace {
 
-/// URL 拆分结果，将完整 URL 分为协议+主机 和 路径 两部分
 struct SplitUrlResult {
-    std::string scheme;      ///< 如 "https"
-    std::string host;        ///< 如 "example.com"
-    int         port = 80;   ///< URL 端口
-    std::string scheme_host; ///< 如 "https://example.com"
-    std::string path;        ///< 如 "/api/v1/books"
+    std::string scheme;
+    std::string host;
+    int         port = 80;
+    std::string scheme_host;
+    std::string path;
 };
 
-/// 将完整 URL 拆分为协议+主机部分和路径部分
-/// 例如 "https://api.example.com/v1/search?q=test" →
-///   scheme_host = "https://api.example.com"
-///   path = "/v1/search?q=test"
 SplitUrlResult split_url(const std::string& url) {
     std::size_t scheme_end = url.find("://");
     std::size_t host_end = std::string::npos;
@@ -68,7 +61,6 @@ SplitUrlResult split_url(const std::string& url) {
     return result;
 }
 
-/// 将 HTTP 方法名统一转为大写
 std::string normalize_method(std::string method) {
     for (char& ch : method) {
         ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
@@ -76,7 +68,6 @@ std::string normalize_method(std::string method) {
     return method;
 }
 
-/// 从请求头中检测 Content-Type，若未指定则回退到请求对象的 content_type 或默认值
 std::string detect_content_type(const HttpRequest& request) {
     for (const auto& [key, value] : request.headers) {
         std::string lower_key;
@@ -129,18 +120,16 @@ bool domain_matches_cookie(const std::string& request_host, const std::string& c
     if (cookie_domain.empty()) {
         return false;
     }
-
     if (request_host == cookie_domain) {
         return true;
     }
-
     if (request_host.size() <= cookie_domain.size()) {
         return false;
     }
 
     const auto offset = request_host.size() - cookie_domain.size();
     return request_host.compare(offset, cookie_domain.size(), cookie_domain) == 0
-           && request_host[offset - 1] == '.';
+        && request_host[offset - 1] == '.';
 }
 
 std::vector<std::string> split_cookie_parts(const std::string& value) {
@@ -230,8 +219,8 @@ std::string format_cookie_descriptors(const std::vector<HttpService::CookieEntry
             text += ", ";
         }
         text += cookies[index].name + "@"
-                + (cookies[index].domain.empty() ? "<host>" : cookies[index].domain)
-                + cookies[index].path;
+            + (cookies[index].domain.empty() ? "<host>" : cookies[index].domain)
+            + cookies[index].path;
         if (cookies[index].secure) {
             text += ";Secure";
         }
@@ -239,17 +228,10 @@ std::string format_cookie_descriptors(const std::vector<HttpService::CookieEntry
     return text;
 }
 
-bool should_use_winhttp(const SplitUrlResult& url, const HttpRequest& request) {
-    if (url.scheme != "https") {
-        return false;
-    }
-
-    const auto normalized_path = request_path_without_query(url.path);
-    if (url.host == "v3.rain.ink" && normalized_path.rfind("/web/", 0) == 0) {
-        return true;
-    }
-
-    return !request.follow_redirects;
+bool is_supported_method(const std::string& method) {
+    return method == "GET"
+ || method == "POST" || method == "PUT"
+ || method == "PATCH" || method == "DELETE" || method == "HEAD";
 }
 
 #ifdef _WIN32
@@ -258,26 +240,12 @@ std::wstring widen(std::string_view value) {
     if (value.empty()) {
         return {};
     }
-
-    const int size = MultiByteToWideChar(
-        CP_UTF8,
-        0,
-        value.data(),
-        static_cast<int>(value.size()),
-        nullptr,
-        0);
+    const int size = MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0);
     if (size <= 0) {
         return std::wstring(value.begin(), value.end());
     }
-
     std::wstring wide(static_cast<std::size_t>(size), L'\0');
-    MultiByteToWideChar(
-        CP_UTF8,
-        0,
-        value.data(),
-        static_cast<int>(value.size()),
-        wide.data(),
-        size);
+    MultiByteToWideChar(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), wide.data(), size);
     return wide;
 }
 
@@ -285,16 +253,7 @@ std::string narrow(std::wstring_view value) {
     if (value.empty()) {
         return {};
     }
-
-    const int size = WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        value.data(),
-        static_cast<int>(value.size()),
-        nullptr,
-        0,
-        nullptr,
-        nullptr);
+    const int size = WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
     if (size <= 0) {
         std::string text;
         text.reserve(value.size());
@@ -303,43 +262,23 @@ std::string narrow(std::wstring_view value) {
         }
         return text;
     }
-
     std::string text(static_cast<std::size_t>(size), '\0');
-    WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        value.data(),
-        static_cast<int>(value.size()),
-        text.data(),
-        size,
-        nullptr,
-        nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, value.data(), static_cast<int>(value.size()), text.data(), size, nullptr, nullptr);
     return text;
 }
 
 std::vector<std::pair<std::string, std::string>> parse_raw_headers(std::wstring_view raw_headers) {
     std::vector<std::pair<std::string, std::string>> headers;
-
     std::size_t start = 0;
     bool first_line = true;
     while (start < raw_headers.size()) {
         const auto end = raw_headers.find(L"\r\n", start);
         const auto line = raw_headers.substr(start, end == std::wstring_view::npos ? std::wstring_view::npos : end - start);
         start = end == std::wstring_view::npos ? raw_headers.size() : end + 2;
-
-        if (line.empty()) {
-            continue;
-        }
-        if (first_line) {
-            first_line = false;
-            continue;
-        }
-
+        if (line.empty()) { continue; }
+        if (first_line) { first_line = false; continue; }
         const auto colon_pos = line.find(L':');
-        if (colon_pos == std::wstring_view::npos) {
-            continue;
-        }
-
+        if (colon_pos == std::wstring_view::npos) { continue; }
         auto key = line.substr(0, colon_pos);
         auto value = line.substr(colon_pos + 1);
         while (!value.empty() && (value.front() == L' ' || value.front() == L'\t')) {
@@ -347,7 +286,6 @@ std::vector<std::pair<std::string, std::string>> parse_raw_headers(std::wstring_
         }
         headers.emplace_back(narrow(key), narrow(value));
     }
-
     return headers;
 }
 
@@ -367,9 +305,7 @@ std::optional<HttpResponse> send_with_winhttp(
     }
 
     const auto close_handle = [](HINTERNET handle) {
-        if (handle) {
-            WinHttpCloseHandle(handle);
-        }
+        if (handle) { WinHttpCloseHandle(handle); }
     };
 
     std::unique_ptr<std::remove_pointer_t<HINTERNET>, decltype(close_handle)> session_guard(session, close_handle);
@@ -385,9 +321,7 @@ std::optional<HttpResponse> send_with_winhttp(
         spdlog::error("WinHTTP connect failed: host={} port={}", url.host, url.port);
         return std::nullopt;
     }
-    std::unique_ptr<std::remove_pointer_t<HINTERNET>, decltype(close_handle)> connect_guard(connect, close_handle);
-
-    DWORD flags = url.scheme == "https" ? WINHTTP_FLAG_SECURE : 0;
+    std::unique_ptr<std::remove_pointer_t<HINTERNET>, decltype(close_handle)> connect_guard(connect, close_handle);    DWORD flags = url.scheme == "https" ? WINHTTP_FLAG_SECURE : 0;
     auto req = WinHttpOpenRequest(connect,
                                   widen(method).c_str(),
                                   widen(url.path).c_str(),
@@ -488,10 +422,7 @@ std::optional<HttpResponse> send_with_winhttp(
             spdlog::error("WinHTTP query data failed: method={} url={}", method, request.url);
             return std::nullopt;
         }
-        if (available == 0) {
-            break;
-        }
-
+        if (available == 0) { break; }
         std::string chunk(static_cast<std::size_t>(available), '\0');
         DWORD read = 0;
         if (!WinHttpReadData(req, chunk.data(), available, &read)) {
@@ -507,6 +438,7 @@ std::optional<HttpResponse> send_with_winhttp(
     response.body = std::move(body);
     response.headers = parse_raw_headers(raw_headers);
     return response;
+
 }
 
 #endif
@@ -569,98 +501,46 @@ std::optional<HttpService::CookieEntry> parse_set_cookie(
 
 } // namespace
 
-/// 发送自定义 HTTP 请求，根据方法分发到 cpp-httplib 对应调用
 std::optional<HttpResponse> HttpService::send(const HttpRequest& request) const {
     SplitUrlResult url = split_url(request.url);
     std::string    method = normalize_method(request.method);
+    if (url.scheme != "http" && url.scheme != "https") {
+        spdlog::error("HTTP request failed: unsupported scheme={} url={}", url.scheme, request.url);
+        return std::nullopt;
+    }
+    if (!is_supported_method(method)) {
+        spdlog::error("HTTP request failed: unsupported method={} url={}", method, request.url);
+        return std::nullopt;
+    }
+
     spdlog::debug("HTTP {} {} | host={} path={} follow_redirects={}",
                   method, request.url, url.scheme_host, url.path, request.follow_redirects);
 
     auto merged_headers = request.headers;
     attach_cookie_header(url.scheme, url.host, url.path, merged_headers);
 
-#ifdef _WIN32
-    if (should_use_winhttp(url, request)) {
-        auto response = send_with_winhttp(request, url, method, merged_headers);
-        if (!response) {
-            return std::nullopt;
-        }
-
-        const auto location = std::find_if(
-            response->headers.begin(),
-            response->headers.end(),
-            [](const auto& header) { return normalize_header_name(header.first) == "location"; });
-        if (location != response->headers.end()) {
-            spdlog::debug("HTTP response {} {} -> status={} location={}",
-                          method, request.url, response->status, location->second);
-        } else {
-            spdlog::debug("HTTP response {} {} -> status={}",
-                          method, request.url, response->status);
-        }
-
-        store_response_cookies(url.host, url.path, response->headers);
-        return response;
-    }
-#endif
-
-    httplib::Client cli(url.scheme_host);
-    cli.set_connection_timeout(request.timeout_seconds, 0);
-    cli.set_read_timeout(request.timeout_seconds, 0);
-    cli.set_follow_location(request.follow_redirects);
-
-    httplib::Headers headers;
-    for (const auto& [key, value] : merged_headers) {
-        headers.emplace(key, value);
-    }
-
-    httplib::Result result;
-    if (method == "GET") {
-        result = cli.Get(url.path, headers);
-    } else if (method == "POST") {
-        result = cli.Post(url.path, headers, request.body, detect_content_type(request));
-    } else if (method == "PUT") {
-        result = cli.Put(url.path, headers, request.body, detect_content_type(request));
-    } else if (method == "PATCH") {
-        result = cli.Patch(url.path, headers, request.body, detect_content_type(request));
-    } else if (method == "DELETE") {
-        if (!request.body.empty()) {
-            spdlog::warn("HTTP DELETE body is currently ignored: {}", request.url);
-        }
-        result = cli.Delete(url.path, headers);
-    } else if (method == "HEAD") {
-        result = cli.Head(url.path, headers);
-    } else {
-        spdlog::error("HTTP request failed: unsupported method={} url={}", method, request.url);
+    auto response = send_with_winhttp(request, url, method, merged_headers);
+    if (!response) {
         return std::nullopt;
     }
 
-    if (!result) {
-        spdlog::error("HTTP request failed: {} {}", method, request.url);
-        return std::nullopt;
-    }
-
-    const auto location = result->get_header_value("Location");
-    if (!location.empty()) {
+    const auto location = std::find_if(
+        response->headers.begin(),
+        response->headers.end(),
+        [](const auto& header) { return normalize_header_name(header.first) == "location"; });
+    if (location != response->headers.end()) {
         spdlog::debug("HTTP response {} {} -> status={} location={}",
-                      method, request.url, result->status, location);
+                      method, request.url, response->status, location->second);
     } else {
         spdlog::debug("HTTP response {} {} -> status={}",
-                      method, request.url, result->status);
+                      method, request.url, response->status);
     }
 
-    // 将 cpp-httplib 响应转换为本项目的 HttpResponse 结构
-    HttpResponse response;
-    response.status = result->status;
-    response.body = result->body;
-    for (const auto& [key, value] : result->headers) {
-        response.headers.emplace_back(key, value);
-    }
-    store_response_cookies(url.host, url.path, response.headers);
+    store_response_cookies(url.host, url.path, response->headers);
 
     return response;
 }
 
-/// 发送 GET 请求，仅在返回 2xx 状态码时返回响应
 std::optional<HttpResponse> HttpService::get(
     const std::string& url,
     const std::vector<std::pair<std::string, std::string>>& headers,
@@ -716,9 +596,6 @@ void HttpService::attach_cookie_header(
         return;
     }
 
-    // 某些站点会错误地依赖 Cookie 头中的顺序。这里按更稳定的规则输出：
-    // 1. 路径更长的 Cookie 优先
-    // 2. 同路径长度下按名称升序，确保 PHPSESSID 等会话 Cookie 排在前面
     std::stable_sort(
         matched_cookies.begin(),
         matched_cookies.end(),
@@ -787,8 +664,8 @@ void HttpService::store_response_cookies(
                 cookies_.end(),
                 [&](const CookieEntry& current) {
                     return current.name == cookie->name
-                           && current.domain == cookie->domain
-                           && current.path == cookie->path;
+                        && current.domain == cookie->domain
+                        && current.path == cookie->path;
                 });
 
             if (cookie->value.empty()) {
@@ -813,7 +690,6 @@ void HttpService::store_response_cookies(
     spdlog::debug("HTTP cookie jar snapshot: {}", format_cookie_descriptors(cookies_));
 }
 
-/// 对字符串进行百分比编码，保留字母数字及 - _ . ~ 安全字符
 std::string url_encode(const std::string& value) {
     std::ostringstream encoded;
     encoded << std::uppercase << std::hex;
