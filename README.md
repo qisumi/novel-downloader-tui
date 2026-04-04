@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前可运行形态：Windows WebView GUI `novel-downloader-gui.exe`
-- 核心能力：搜索、书源切换、目录获取、章节缓存、批量下载、EPUB/TXT 导出
+- 核心能力：搜索、书源切换、目录获取、章节缓存、登录状态展示、批量下载、EPUB/TXT 导出
 - 书源机制：运行时从 `plugins/` 加载 JS 插件
 - 当前构建：顶层 CMake 同时构建核心库 `novel-core` 与 GUI 宿主
 
@@ -17,6 +17,7 @@
 | 书源切换 | 加载并切换 `fanqie`、`qimao` 等插件书源 |
 | 目录获取 | 拉取并缓存章节目录 |
 | 章节缓存 | 使用 SQLite 缓存正文 |
+| 登录状态 | 对支持登录的书源显示当前会话状态与今日剩余下载额度 |
 | 批量下载 | 按目录批量抓取章节 |
 | 导出 | 导出 EPUB / TXT |
 | 插件扩展 | 可新增 JS 书源插件 |
@@ -95,6 +96,7 @@ NOVEL_GUI_DEV_SERVER=
 - `FANQIE_APIKEY`、`QIMAO_APIKEY` 是否必填，以对应插件 `manifest.required_envs` 为准
 - GUI 启动时会优先读取可执行文件同目录 `.env`
 - `NOVEL_GUI_DEV_SERVER` 非空时，GUI 宿主会直接导航到该前端 dev server
+- `fanqie` 书源登录成功后，侧边栏会显示当前会话的“今日剩余下载额度”
 
 ## 构建与运行
 

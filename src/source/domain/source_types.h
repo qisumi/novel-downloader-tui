@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,12 @@ struct SourceCapabilities {
     bool supports_chapter = true;     ///< 是否支持获取章节正文
     bool supports_batch = false;      ///< 是否支持批量下载
     bool supports_login = false;      ///< 是否支持登录
+};
+
+/// 书源当前会话状态（登录态、额度等动态信息）
+struct SourceSessionStatus {
+    bool               logged_in = false;                      ///< 当前会话是否已登录
+    std::optional<int> remaining_download_quota;              ///< 今日剩余下载额度；未知时为空
 };
 
 } // namespace novel

@@ -29,12 +29,15 @@ public:
         const std::string& item_id) override;
     bool login() override;
     bool is_logged_in() const override { return logged_in_; }
+    SourceSessionStatus get_session_status() override;
+    SourceSessionStatus refresh_session_status() override;
     int get_batch_count(const std::string& book_id) override;
     std::vector<Chapter> get_batch(const std::string& book_id, int batch_no) override;
 
 private:
     /// 从 JS 插件的 manifest JSON 中解析并填充 SourceInfo
     void load_manifest(const nlohmann::json& manifest);
+    SourceSessionStatus query_session_status(bool force_refresh);
 
     std::string                      plugin_path_;  ///< 插件文件绝对路径
     std::string                      module_id_;    ///< 插件模块 ID（如 "fanqie"）
@@ -43,10 +46,12 @@ private:
     SourceCapabilities               capabilities_; ///< 书源能力声明
     bool                             has_configure_ = false;  ///< 插件是否实现了 configure 方法
     bool                             has_login_ = false;      ///< 插件是否实现了 login 方法
+    bool                             has_status_ = false;     ///< 插件是否实现了 get_status 方法
     bool                             has_book_info_ = false;  ///< 插件是否实现了 get_book_info 方法
     bool                             has_batch_count_ = false; ///< 插件是否实现了 get_batch_count 方法
     bool                             has_batch_ = false;       ///< 插件是否实现了 get_batch 方法
     bool                             logged_in_ = false;       ///< 当前会话是否已登录
+    SourceSessionStatus              session_status_;          ///< 当前会话状态缓存
 };
 
 } // namespace novel

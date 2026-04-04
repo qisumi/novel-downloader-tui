@@ -18,6 +18,8 @@
 可选：
 
 - `configure()`：无参数，由宿主在当前书源首次就绪后调用，用于校验配置、初始化状态等
+- `login()`：执行当前书源登录流程
+- `get_status(forceRefresh)`：返回当前书源会话状态，可用于透传登录态、今日剩余下载额度等动态信息
 - `get_book_info(book_id)`
 
 插件方法可以返回普通值，也可以返回 `Promise`。
@@ -37,6 +39,8 @@ module.exports = {
   },
 
   async configure() {},
+  async login() {},
+  async get_status(forceRefresh) {},
   async search(keywords, page) {},
   async get_book_info(bookId) {},
   async get_toc(bookId) {},
@@ -86,6 +90,19 @@ module.exports = {
 ### get_book_info(book_id) → Book | null
 
 返回结构与 `search` 相同的单个对象，或 `null`。此函数为可选，若插件未定义则宿主返回空。
+
+### get_status(forceRefresh) → SourceSessionStatus | null
+
+返回当前书源会话状态对象，或 `null`。该函数为可选，若插件未定义则宿主仅保留基础登录态。
+
+| 字段 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `logged_in` | boolean | 否 | 当前宿主登录态 | 当前会话是否已登录 |
+| `remaining_download_quota` | integer | 否 | `null` | 今日剩余下载额度 |
+
+参数说明：
+
+- `forceRefresh`：boolean。为 `true` 时，插件可主动请求远端刷新状态；为 `false` 时，优先返回缓存状态。
 
 ### get_toc(book_id) → TocItem[]
 

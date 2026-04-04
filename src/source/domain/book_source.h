@@ -50,6 +50,19 @@ public:
     /// 当前书源是否处于已登录状态（默认无登录态）
     virtual bool is_logged_in() const { return false; }
 
+    /// 获取当前书源的已缓存会话状态（默认仅返回登录态）
+    virtual SourceSessionStatus get_session_status() {
+        return {
+            .logged_in = is_logged_in(),
+            .remaining_download_quota = std::nullopt,
+        };
+    }
+
+    /// 可选：刷新当前书源会话状态（默认返回缓存状态）
+    virtual SourceSessionStatus refresh_session_status() {
+        return get_session_status();
+    }
+
     /// 可选：获取批量下载总批次数（默认不支持）
     virtual int get_batch_count(const std::string& book_id) { return 0; }
 

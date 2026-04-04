@@ -32,6 +32,7 @@ struct JsBootstrapPlugin {
     nlohmann::json manifest;        ///< 插件 manifest 对象
     bool           has_configure = false;  ///< 是否导出 configure 方法
     bool           has_login = false;      ///< 是否导出 login 方法
+    bool           has_status = false;     ///< 是否导出 get_status 方法
     bool           has_search = false;     ///< 是否导出 search 方法
     bool           has_book_info = false;  ///< 是否导出 get_book_info 方法
     bool           has_toc = false;        ///< 是否导出 get_toc 方法

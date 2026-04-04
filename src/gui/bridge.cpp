@@ -40,11 +40,11 @@ json source_to_json(const SourceInfo& source, bool selected)
     };
 }
 
-/// 将当前书源能力和登录态转换为 JSON 对象
-json capabilities_to_json(const IBookSource& source)
+/// 将当前书源能力和会话状态转换为 JSON 对象
+json capabilities_to_json(const IBookSource& source, const SourceSessionStatus& session_status)
 {
     const auto& capabilities = source.capabilities();
-    const bool logged_in = source.is_logged_in();
+    const bool logged_in = session_status.logged_in;
     return {
         {"supports_search", capabilities.supports_search},
         {"supports_book_info", capabilities.supports_book_info},
@@ -53,6 +53,9 @@ json capabilities_to_json(const IBookSource& source)
         {"supports_batch", capabilities.supports_batch},
         {"supports_login", capabilities.supports_login},
         {"logged_in", logged_in},
+        {"remaining_download_quota", session_status.remaining_download_quota
+                                         ? json(*session_status.remaining_download_quota)
+                                         : json(nullptr)},
         {"batch_enabled", capabilities.supports_batch && (!capabilities.supports_login || logged_in)},
     };
 }
@@ -245,19 +248,27 @@ window.app = {
         std::scoped_lock lock(core_mutex_);
         auto source = runtime_.source_manager()->current_source();
         const bool logged_in = source->login();
+        const auto session_status = source->get_session_status();
         return make_success({
             {"source_id", source->info().id},
             {"logged_in", logged_in},
+            {"remaining_download_quota", session_status.remaining_download_quota
+                                             ? json(*session_status.remaining_download_quota)
+                                             : json(nullptr)},
             {"batch_enabled", source->capabilities().supports_batch
                                   && (!source->capabilities().supports_login || logged_in)},
         });
     });
 
     // ── 获取当前书源能力 ────────────────────────────────────────
-    bind_async("native_get_source_capabilities", [&](const json&) {
+    bind_async("native_get_source_capabilities", [&](const json& args) {
+        const bool force_refresh = optional_bool_arg(args, 0, false);
         std::scoped_lock lock(core_mutex_);
         auto source = runtime_.source_manager()->current_source();
-        auto payload = capabilities_to_json(*source);
+        const auto session_status = force_refresh
+                                        ? source->refresh_session_status()
+                                        : source->get_session_status();
+        auto payload = capabilities_to_json(*source, session_status);
         payload["source_id"] = source->info().id;
         return make_success(std::move(payload));
     });

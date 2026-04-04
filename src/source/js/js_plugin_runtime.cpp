@@ -462,6 +462,7 @@ void JsPluginRuntime::install() {
                         plugin.manifest = item.value("manifest", json(nullptr));
                         plugin.has_configure = item.value("has_configure", false);
                         plugin.has_login = item.value("has_login", false);
+                        plugin.has_status = item.value("has_status", false);
                         plugin.has_search = item.value("has_search", false);
                         plugin.has_book_info = item.value("has_book_info", false);
                         plugin.has_toc = item.value("has_toc", false);
@@ -527,6 +528,7 @@ void JsPluginRuntime::queue_bootstrap(const std::vector<JsModule>& plugins) {
         "          manifest: plugin && typeof plugin === 'object' ? (plugin.manifest ?? null) : null,"
         "          has_configure: !!(plugin && typeof plugin.configure === 'function'),"
         "          has_login: !!(plugin && typeof plugin.login === 'function'),"
+        "          has_status: !!(plugin && typeof plugin.get_status === 'function'),"
         "          has_search: !!(plugin && typeof plugin.search === 'function'),"
         "          has_book_info: !!(plugin && typeof plugin.get_book_info === 'function'),"
         "          has_toc: !!(plugin && typeof plugin.get_toc === 'function'),"

@@ -16,6 +16,8 @@ const sourceSelect = document.querySelector('#source-select');
 const refreshSourcesButton = document.querySelector('#refresh-sources');
 const sourceAuthBadge = document.querySelector('#source-auth-badge');
 const sourceAuthMeta = document.querySelector('#source-auth-meta');
+const sourceAuthQuota = document.querySelector('#source-auth-quota');
+const sourceAuthQuotaValue = document.querySelector('#source-auth-quota-value');
 const sourceLoginButton = document.querySelector('#source-login-button');
 const searchForm = document.querySelector('#search-form');
 const searchInput = document.querySelector('#search-input');
@@ -233,6 +235,36 @@ function getCurrentLoginStatusText() {
   return state.sourceCapabilities.logged_in ? '已登录' : '未登录';
 }
 
+function hasRemainingQuota() {
+  const quota = Number(state.sourceCapabilities?.remaining_download_quota);
+  return Number.isFinite(quota) && quota >= 0;
+}
+
+function formatRemainingQuota() {
+  if (!hasRemainingQuota()) return '待同步';
+  return `${Number(state.sourceCapabilities.remaining_download_quota).toLocaleString('zh-CN')} 次`;
+}
+
+function hideRemainingQuota() {
+  if (sourceAuthQuota) sourceAuthQuota.hidden = true;
+  if (sourceAuthQuotaValue) sourceAuthQuotaValue.textContent = '--';
+}
+
+function showRemainingQuota() {
+  if (!sourceAuthQuota || !sourceAuthQuotaValue) return;
+  sourceAuthQuota.hidden = false;
+  sourceAuthQuotaValue.textContent = formatRemainingQuota();
+}
+
+function buildLoginSuccessStatus() {
+  const parts = [`已登录 ${getCurrentSourceName()}`];
+  if (hasRemainingQuota()) {
+    parts.push(`今日剩余额度 ${formatRemainingQuota()}`);
+  }
+  parts.push(`当前${getCurrentDownloadMode()}`);
+  return parts.join(' · ');
+}
+
 function renderSourceAuth() {
   if (!sourceAuthBadge || !sourceAuthMeta || !sourceLoginButton) return;
   const cap = state.sourceCapabilities;
@@ -242,6 +274,7 @@ function renderSourceAuth() {
     sourceAuthBadge.className = 'source-auth-badge is-neutral';
     sourceAuthMeta.textContent = '正在读取当前书源登录状态';
     sourceLoginButton.style.display = 'none';
+    hideRemainingQuota();
     return;
   }
   sourceAuthBadge.textContent = getCurrentLoginStatusText();
@@ -249,13 +282,21 @@ function renderSourceAuth() {
     sourceAuthBadge.className = 'source-auth-badge is-neutral';
     sourceAuthMeta.textContent = `${name} 不需要登录，当前使用 ${getCurrentDownloadMode()}`;
     sourceLoginButton.style.display = 'none';
+    hideRemainingQuota();
     return;
   }
   sourceAuthBadge.className = `source-auth-badge ${cap.logged_in ? 'is-online' : 'is-offline'}`;
   sourceLoginButton.style.display = 'inline-flex';
   sourceLoginButton.textContent = cap.logged_in ? '重新登录' : '登录';
+  if (cap.logged_in) {
+    showRemainingQuota();
+  } else {
+    hideRemainingQuota();
+  }
   sourceAuthMeta.textContent = cap.logged_in
-    ? `${name} 当前会话已登录，${getCurrentDownloadMode()} 已启用`
+    ? hasRemainingQuota()
+      ? `${name} 当前会话已登录，今日剩余额度 ${formatRemainingQuota()}，${getCurrentDownloadMode()} 已启用`
+      : `${name} 当前会话已登录，${getCurrentDownloadMode()} 已启用`
     : cap.supports_batch
       ? `${name} 当前未登录，下载会回退为逐章模式；登录后可启用批量下载`
       : `${name} 支持会话登录，但当前功能无需登录即可使用`;
@@ -556,14 +597,14 @@ function createOptimisticTask(kind, book, extra = {}) {
 async function loadSources() {
   const payload = await callApp('get_sources');
   renderSources(payload);
-  state.sourceCapabilities = await callApp('getSourceCapabilities');
+  state.sourceCapabilities = await callApp('getSourceCapabilities', false);
   renderSourceAuth();
   if (state.selectedBook) renderBookDetail(state.selectedBook);
   setStatus(`已加载 ${Array.isArray(payload?.sources) ? payload.sources.length : 0} 个书源 · 当前${getCurrentDownloadMode()}`);
 }
 
-async function refreshSourceCapabilities() {
-  state.sourceCapabilities = await callApp('getSourceCapabilities');
+async function refreshSourceCapabilities(forceRefresh = false) {
+  state.sourceCapabilities = await callApp('getSourceCapabilities', forceRefresh);
   renderSourceAuth();
   if (state.selectedBook) renderBookDetail(state.selectedBook);
 }
@@ -638,8 +679,8 @@ withButtonLock(sourceLoginButton, async () => {
   if (!state.sourceCapabilities?.supports_login) return;
   setStatus(`正在登录 ${getCurrentSourceName()}...`);
   await callApp('login');
-  await refreshSourceCapabilities();
-  setStatus(`已登录 ${getCurrentSourceName()} · 当前${getCurrentDownloadMode()}`);
+  await refreshSourceCapabilities(false);
+  setStatus(buildLoginSuccessStatus());
 });
 
 withButtonLock(document.querySelector('#reload-toc'), async () => {
@@ -659,8 +700,14 @@ withButtonLock(document.querySelector('#download-book'), async () => {
     upsertTask({ task_id: payload.task_id, kind: 'download', stage: 'finished',
       book_id: state.selectedBook.book_id, title: state.selectedBook.title,
       cover_url: state.selectedBook.cover_url, current: payload.downloaded, total: payload.downloaded });
-    setStatus('缓存完成');
     renderToc(await callApp('get_toc', state.selectedBook.book_id, false));
+    if (state.sourceCapabilities?.supports_login && state.sourceCapabilities?.logged_in) {
+      try {
+        await refreshSourceCapabilities(true);
+      } catch (_error) {
+      }
+    }
+    setStatus('缓存完成');
   } catch (error) {
     upsertTask({ task_id: optimisticTaskId, kind: 'download', stage: 'failed',
       book_id: state.selectedBook.book_id, title: state.selectedBook.title,

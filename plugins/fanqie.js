@@ -11,6 +11,7 @@ const USER_RE = /const user = (\{.*?\});/s;
 const ctx = {
   api_key: "",
   logged_in: false,
+  remaining_calls: null,
   user_info: null,
 };
 
@@ -92,6 +93,14 @@ const parseUserInfo = (html) => {
   }
 };
 
+const parseRemainingCalls = (value) => {
+  const remaining = Number(value);
+  if (!Number.isFinite(remaining) || remaining < 0) {
+    return null;
+  }
+  return Math.floor(remaining);
+};
+
 const getAuthMarkers = (html) => {
   const text = String(html || "");
   return {
@@ -125,6 +134,38 @@ const requireLoggedIn = () => {
   }
 };
 
+const refreshRemainingCalls = async (forceRefresh = false) => {
+  if (!ctx.logged_in) {
+    ctx.remaining_calls = null;
+    return null;
+  }
+
+  if (!forceRefresh && Number.isFinite(ctx.remaining_calls)) {
+    return ctx.remaining_calls;
+  }
+
+  try {
+    const payload = await common.postFormJson(
+      LOGIN_URL,
+      {
+        refreshRemaining: 1,
+        apikey: await ensureApiKey(),
+      },
+      {},
+      30,
+    );
+
+    const remaining = parseRemainingCalls(payload?.remaining_calls);
+    if (remaining != null) {
+      ctx.remaining_calls = remaining;
+    }
+  } catch (error) {
+    await host.log_warn(`fanqie refresh remaining failed: ${error?.message || String(error)}`);
+  }
+
+  return ctx.remaining_calls;
+};
+
 module.exports = {
   manifest: {
     id: "fanqie",
@@ -139,6 +180,7 @@ module.exports = {
   async configure() {
     ctx.api_key = await common.requireEnv("FANQIE_APIKEY");
     ctx.logged_in = false;
+    ctx.remaining_calls = null;
     ctx.user_info = null;
   },
 
@@ -191,7 +233,16 @@ module.exports = {
 
     ctx.user_info = parseUserInfo(html);
     ctx.logged_in = true;
+    ctx.remaining_calls = await refreshRemainingCalls(true);
     return true;
+  },
+
+  async get_status(forceRefresh = false) {
+    const remaining = await refreshRemainingCalls(!!forceRefresh);
+    return {
+      logged_in: !!ctx.logged_in,
+      remaining_download_quota: remaining,
+    };
   },
 
   async search(keywords, page) {

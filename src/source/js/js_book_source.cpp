@@ -350,6 +350,7 @@ JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBoo
       runtime_(std::move(runtime)),
       has_configure_(plugin.has_configure),
       has_login_(plugin.has_login),
+      has_status_(plugin.has_status),
       has_book_info_(plugin.has_book_info),
       has_batch_count_(plugin.has_batch_count),
       has_batch_(plugin.has_batch) {
@@ -392,6 +393,9 @@ JsBookSource::JsBookSource(std::shared_ptr<JsPluginRuntime> runtime, const JsBoo
 
 /// 调用 JS 插件的 configure 方法（若插件实现了该方法）
 void JsBookSource::configure() {
+    logged_in_ = false;
+    session_status_ = {};
+
     if (!has_configure_) {
         return;
     }
@@ -409,6 +413,7 @@ bool JsBookSource::login() {
     }
 
     logged_in_ = false;
+    session_status_ = {};
     logged_in_ = invoke_with_error_context(info_.id, plugin_path_, "login", [&] {
         const auto result = runtime_->call(module_id_, "login", json::array());
         if (!result.is_boolean()) {
@@ -422,7 +427,32 @@ bool JsBookSource::login() {
         }
         return result.get<bool>();
     });
+    session_status_.logged_in = logged_in_;
     return logged_in_;
+}
+
+SourceSessionStatus JsBookSource::get_session_status() {
+    if (!has_status_) {
+        session_status_.logged_in = logged_in_;
+        if (!logged_in_) {
+            session_status_.remaining_download_quota.reset();
+        }
+        return session_status_;
+    }
+
+    return query_session_status(false);
+}
+
+SourceSessionStatus JsBookSource::refresh_session_status() {
+    if (!has_status_) {
+        session_status_.logged_in = logged_in_;
+        if (!logged_in_) {
+            session_status_.remaining_download_quota.reset();
+        }
+        return session_status_;
+    }
+
+    return query_session_status(true);
 }
 
 /// 调用 JS 插件的 search 方法，解析返回的书籍数组
@@ -539,6 +569,57 @@ std::vector<Chapter> JsBookSource::get_batch(const std::string& book_id, int bat
         }
         return chapters;
     });
+}
+
+SourceSessionStatus JsBookSource::query_session_status(bool force_refresh) {
+    auto status = invoke_with_error_context(info_.id, plugin_path_, "get_status", [&] {
+        const auto result = runtime_->call(module_id_, "get_status", json::array({force_refresh}));
+        if (result.is_null()) {
+            return session_status_;
+        }
+        if (!result.is_object()) {
+            throw SourceException({
+                SourceErrorCode::InvalidReturnType,
+                info_.id,
+                plugin_path_,
+                "get_status",
+                "expected object",
+            });
+        }
+
+        SourceSessionStatus parsed;
+        parsed.logged_in = logged_in_;
+        if (result.contains("logged_in") && !result["logged_in"].is_null()) {
+            if (!result["logged_in"].is_boolean()) {
+                throw SourceException({
+                    SourceErrorCode::InvalidReturnField,
+                    info_.id,
+                    plugin_path_,
+                    "get_status.logged_in",
+                    "expected boolean",
+                });
+            }
+            parsed.logged_in = result["logged_in"].get<bool>();
+        }
+
+        if (result.contains("remaining_download_quota") && !result["remaining_download_quota"].is_null()) {
+            parsed.remaining_download_quota = integer_from_value<int>(
+                result["remaining_download_quota"],
+                info_.id,
+                plugin_path_,
+                "get_status.remaining_download_quota",
+                0);
+        }
+
+        return parsed;
+    });
+
+    logged_in_ = status.logged_in;
+    if (!logged_in_) {
+        status.remaining_download_quota.reset();
+    }
+    session_status_ = status;
+    return session_status_;
 }
 
 // ── manifest 解析 ─────────────

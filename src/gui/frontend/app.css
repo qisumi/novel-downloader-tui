@@ -360,6 +360,28 @@ option {
   line-height: 1.6;
 }
 
+.source-auth-quota {
+  margin-top: 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(159, 91, 32, 0.1);
+}
+
+.source-auth-quota-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.source-auth-quota-value {
+  color: var(--brand-deep);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 .panel-title,
 .label {
   display: block;
