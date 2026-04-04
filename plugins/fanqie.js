@@ -4,6 +4,7 @@ const rainBatch = require("_shared/rain_batch");
 const API_URL = "http://v3.rain.ink/fanqie/";
 const WEB_BASE_URL = "https://v3.rain.ink";
 const LOGIN_URL = `${WEB_BASE_URL}/web/index.php`;
+const COVER_ORIGIN_URL = "https://p6-novel.byteimg.com/origin/";
 const INVALID_KEY_MARKER = "无效的API密钥";
 const USER_RE = /const user = (\{.*?\});/s;
 
@@ -13,11 +14,45 @@ const ctx = {
   user_info: null,
 };
 
+const normalizeCoverUrl = (value) => String(value || "").trim();
+
+const isDisplayableCoverUrl = (value) => {
+  const url = normalizeCoverUrl(value);
+  return !!url && !/\.hei[cf](?:$|[?#])/i.test(url);
+};
+
+const buildOriginCoverUrl = (thumbUri) => {
+  const normalized = String(thumbUri || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+  return `${COVER_ORIGIN_URL}${normalized.replace(/^\/+/, "")}`;
+};
+
+const pickCoverUrl = (data) => {
+  const candidates = [
+    common.getString(data, "thumb_url", ""),
+    common.getString(data, "cover_url", ""),
+    buildOriginCoverUrl(common.getString(data, "thumb_uri", "")),
+  ];
+
+  for (const candidate of candidates) {
+    if (isDisplayableCoverUrl(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "";
+};
+
 const parseBook = (data) => ({
   book_id: common.getString(data, "book_id", ""),
   title: common.getString(data, "book_name", common.getString(data, "title", "")),
   author: common.getString(data, "author", ""),
-  cover_url: common.getString(data, "thumb_url", common.getString(data, "cover_url", "")),
+  cover_url: pickCoverUrl(data),
   abstract: common.getString(data, "abstract", ""),
   category: common.getString(data, "category", ""),
   word_count: common.getString(data, "word_number", common.getString(data, "word_count", "")),

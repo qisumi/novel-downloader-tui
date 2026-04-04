@@ -175,6 +175,31 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function normalizeCoverUrl(value) {
+  return String(value ?? '').trim();
+}
+
+function isDisplayableCoverUrl(value) {
+  const url = normalizeCoverUrl(value);
+  return !!url && !/\.hei[cf](?:$|[?#])/i.test(url);
+}
+
+function pickDisplayableCoverUrl(...values) {
+  for (const value of values) {
+    const url = normalizeCoverUrl(value);
+    if (isDisplayableCoverUrl(url)) {
+      return url;
+    }
+  }
+  return '';
+}
+
+function mergeBookDetail(currentBook, detailBook) {
+  const merged = { ...(currentBook || {}), ...(detailBook || {}) };
+  merged.cover_url = pickDisplayableCoverUrl(detailBook?.cover_url, currentBook?.cover_url);
+  return merged;
+}
+
 function formatWordCount(value) {
   const text = String(value ?? '').trim();
   if (!text || !/^\d+$/.test(text)) return text || '待补充';
@@ -247,13 +272,14 @@ function renderCoverFallback(book) {
 function createTaskCoverFallbackElement(detail) {
   const fallback = document.createElement('div');
   fallback.className = 'task-cover-fallback';
-  fallback.innerHTML = getBookMonogram(detail);
+  fallback.textContent = getBookMonogram(detail);
   return fallback;
 }
+
 function renderBookDetail(book) {
   if (!book || !detailView) return;
   const e = escapeHtml;
-  const coverUrl = String(book.cover_url || '').trim();
+  const coverUrl = pickDisplayableCoverUrl(book.cover_url);
   detailView.className = 'book-detail';
   detailView.innerHTML = `
     <div class="book-detail-hero">
@@ -364,7 +390,7 @@ function createTaskCoverImage(detail, coverUrl) {
 
 function updateTaskCover(container, detail) {
   if (!container) return;
-  const coverUrl = String(detail.cover_url || '').trim();
+  const coverUrl = pickDisplayableCoverUrl(detail.cover_url);
   const title = getTaskTitle(detail);
   const author = String(detail.author || '');
   const currentImage = container.querySelector('.task-cover-image');
@@ -372,7 +398,7 @@ function updateTaskCover(container, detail) {
 
   if (!coverUrl) {
     container.classList.add('is-fallback');
-    if (!currentFallback || currentImage || currentFallback.innerHTML !== getBookMonogram(detail)) {
+    if (!currentFallback || currentImage || currentFallback.textContent !== getBookMonogram(detail)) {
       container.replaceChildren(createTaskCoverFallbackElement(detail));
     }
     return;
@@ -506,6 +532,7 @@ function upsertTask(detail) {
     optimistic: detail.optimistic ?? taskId.startsWith('pending-'),
     updated_at: Date.now(),
   };
+  merged.cover_url = pickDisplayableCoverUrl(detail.cover_url, current?.cover_url);
   if (idx >= 0) {
     state.tasks[idx] = merged;
   } else {
@@ -517,6 +544,7 @@ function upsertTask(detail) {
   }
   syncTaskElement(merged, previousTaskId);
 }
+
 function createOptimisticTask(kind, book, extra = {}) {
   const taskId = `pending-${kind}-${Date.now()}`;
   upsertTask({ task_id: taskId, kind, stage: 'queued', book_id: book?.book_id || '', title: book?.title || '', cover_url: book?.cover_url || '', optimistic: true, ...extra });
@@ -547,20 +575,20 @@ async function loadBookshelf() {
 }
 
 async function selectBook(book) {
-  state.selectedBook = book;
+  state.selectedBook = { ...book, cover_url: pickDisplayableCoverUrl(book?.cover_url) };
   showDetailPage();
-  renderBookDetail(book);
-  updateBookshelfButtons(book.book_id);
+  renderBookDetail(state.selectedBook);
+  updateBookshelfButtons(state.selectedBook.book_id);
   if (tocSummary) tocSummary.textContent = '加载目录中...';
   if (tocList) tocList.innerHTML = '<div class="empty-state">正在同步书籍信息...</div>';
   setStatus(`正在加载《${book.title || book.book_id}》...`);
   try {
     const detail = await callApp('get_book_detail', book.book_id);
-    state.selectedBook = detail.book;
-    renderBookDetail(detail.book);
-    updateBookshelfButtons(detail.book.book_id);
-    renderToc(await callApp('get_toc', detail.book.book_id, false));
-    setStatus(`已载入《${detail.book.title || detail.book.book_id}》`);
+    state.selectedBook = mergeBookDetail(state.selectedBook, detail.book);
+    renderBookDetail(state.selectedBook);
+    updateBookshelfButtons(state.selectedBook.book_id);
+    renderToc(await callApp('get_toc', state.selectedBook.book_id, false));
+    setStatus(`已载入《${state.selectedBook.title || state.selectedBook.book_id}》`);
   } catch (error) {
     showError(error);
     if (tocList) tocList.innerHTML = '<div class="empty-state" style="color:#d32f2f;">加载目录失败</div>';
@@ -693,4 +721,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

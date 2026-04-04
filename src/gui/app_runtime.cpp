@@ -29,10 +29,7 @@ std::filesystem::path path_from_utf8(std::string_view value)
 
 void apply_export_dir_from_env(GuiPaths& paths)
 {
-    const char* configured = std::getenv("EXPORT_EPUB_DIR");
-    if (!configured || !*configured) {
-        configured = std::getenv("NOVEL_EPUB_DIR");
-    }
+    const char* configured = std::getenv("EXPORT_DIR");
     if (!configured || !*configured) {
         return;
     }
