@@ -51,6 +51,28 @@ std::string trim_ascii(std::string value) {
     return value.substr(first, last - first + 1);
 }
 
+std::string normalize_cover_url(std::string url) {
+    url = trim_ascii(std::move(url));
+    if (url.rfind("//", 0) == 0) {
+        return "https:" + url;
+    }
+    return url;
+}
+
+std::string origin_from_url(std::string_view url) {
+    const auto scheme_pos = url.find("://");
+    if (scheme_pos == std::string::npos) {
+        return {};
+    }
+
+    const auto host_start = scheme_pos + 3;
+    const auto host_end = url.find('/', host_start);
+    if (host_end == std::string::npos) {
+        return std::string(url);
+    }
+    return std::string(url.substr(0, host_end));
+}
+
 std::string media_type_from_url(std::string_view url) {
     auto trimmed = std::string(url);
     const auto fragment_pos = trimmed.find('#');
@@ -113,48 +135,60 @@ std::string cover_extension_for_media_type(std::string_view media_type) {
 }
 
 std::string media_type_from_response(const HttpResponse& response, std::string_view cover_url) {
+    std::string header_media_type;
     for (const auto& [name, value] : response.headers) {
         if (to_lower_ascii(name) != "content-type") {
             continue;
         }
 
-        auto media_type = value;
+        header_media_type = value;
+        auto media_type = header_media_type;
         const auto semicolon_pos = media_type.find(';');
         if (semicolon_pos != std::string::npos) {
             media_type.erase(semicolon_pos);
         }
         media_type = to_lower_ascii(trim_ascii(media_type));
-        if (!media_type.empty()) {
+        if (media_type.rfind("image/", 0) == 0) {
             return media_type;
         }
+        break;
     }
 
-    auto media_type = media_type_from_url(cover_url);
+    auto media_type = media_type_from_signature(response.body);
     if (!media_type.empty()) {
         return media_type;
     }
 
-    return media_type_from_signature(response.body);
+    media_type = media_type_from_url(cover_url);
+    if (!media_type.empty()) {
+        return media_type;
+    }
+
+    return to_lower_ascii(trim_ascii(std::move(header_media_type)));
 }
 
 std::optional<CoverAsset> fetch_cover_asset(
     const std::shared_ptr<HttpService>& http_service,
     const std::string& cover_url) {
-    if (!http_service || cover_url.empty()) {
+    const auto normalized_cover_url = normalize_cover_url(cover_url);
+    if (!http_service || normalized_cover_url.empty()) {
         return std::nullopt;
     }
 
-    const auto response = http_service->get(
-        cover_url,
-        {
-            {"Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
-        },
-        30);
-    if (!response || response->body.empty()) {
+    std::vector<std::pair<std::string, std::string>> headers{
+        {"Accept", "image/jpeg,image/png,image/gif,image/*;q=0.9,*/*;q=0.8"},
+        {"User-Agent", "novel-downloader/0.2"},
+    };
+    if (const auto origin = origin_from_url(normalized_cover_url); !origin.empty()) {
+        headers.emplace_back("Referer", origin + "/");
+    }
+
+    const auto response = http_service->get(normalized_cover_url, headers, 30);
+    if (!response || response->status < 200 || response->status >= 300 || response->body.empty()) {
         return std::nullopt;
     }
 
-    const auto media_type = media_type_from_response(*response, cover_url);
+    const auto media_type = media_type_from_response(*response, normalized_cover_url);
     if (media_type.rfind("image/", 0) != 0) {
         return std::nullopt;
     }

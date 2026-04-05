@@ -27,19 +27,54 @@ std::filesystem::path path_from_utf8(std::string_view value)
         reinterpret_cast<const char8_t*>(value.data()) + value.size()));
 }
 
-void apply_export_dir_from_env(GuiPaths& paths)
+const char* first_non_empty_env(std::initializer_list<const char*> names)
 {
-    const char* configured = std::getenv("EXPORT_DIR");
-    if (!configured || !*configured) {
-        return;
+    for (const char* name : names) {
+        if (const char* value = std::getenv(name)) {
+            if (*value) {
+                return value;
+            }
+        }
+    }
+    return nullptr;
+}
+
+std::filesystem::path resolve_runtime_path(
+    const GuiPaths& paths,
+    std::string_view configured_value)
+{
+    auto resolved = path_from_utf8(configured_value);
+    if (resolved.is_relative()) {
+        resolved = paths.run_dir / resolved;
+    }
+    return resolved.lexically_normal();
+}
+
+void load_runtime_env(const GuiPaths& paths)
+{
+    dotenv::load((paths.run_dir / ".env").string());
+    if (paths.executable_dir != paths.run_dir) {
+        dotenv::load((paths.executable_dir / ".env").string());
+    }
+}
+
+void apply_runtime_paths_from_env(GuiPaths& paths)
+{
+    if (const char* configured = first_non_empty_env({"NOVEL_DB"})) {
+        paths.db_path = resolve_runtime_path(paths, configured);
     }
 
-    auto export_dir = path_from_utf8(configured);
-    if (export_dir.is_relative()) {
-        export_dir = paths.executable_dir / export_dir;
+    if (const char* configured = first_non_empty_env({"NOVEL_EPUB_DIR", "EXPORT_DIR"})) {
+        paths.exports_dir = resolve_runtime_path(paths, configured);
     }
 
-    paths.exports_dir = export_dir.lexically_normal();
+    if (const char* configured = first_non_empty_env({"NOVEL_PLUGIN_DIR"})) {
+        paths.plugin_dir = resolve_runtime_path(paths, configured);
+    }
+
+    if (!paths.db_path.parent_path().empty()) {
+        std::filesystem::create_directories(paths.db_path.parent_path());
+    }
     std::filesystem::create_directories(paths.exports_dir);
 }
 
@@ -51,8 +86,8 @@ void GuiAppRuntime::initialize(webview::webview& window)
     paths_ = resolve_gui_paths();
 
     // 加载 .env 环境变量（如 API 密钥）
-    dotenv::load((paths_.executable_dir / ".env").string());
-    apply_export_dir_from_env(paths_);
+    load_runtime_env(paths_);
+    apply_runtime_paths_from_env(paths_);
 
     // 初始化日志系统，输出到文件
     init_logger(paths_.log_path.string());

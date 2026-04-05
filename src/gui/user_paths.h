@@ -2,7 +2,7 @@
 /// @brief GUI 运行时路径解析
 ///
 /// 定义所有运行时路径的结构体（GuiPaths），并提供路径解析函数。
-/// 路径包括：可执行文件目录、应用数据根目录、日志/数据/导出目录、
+/// 路径包括：可执行文件目录、运行根目录、日志/数据/导出目录、
 /// 数据库路径、插件目录和前端资源目录。
 
 #pragma once
@@ -15,11 +15,11 @@ namespace novel {
 struct GuiPaths {
     std::filesystem::path executable_dir;   ///< 可执行文件所在目录
     std::filesystem::path run_dir;          ///< 当前工作目录
-    std::filesystem::path app_root;         ///< 应用数据根目录（%LocalAppData%/NovelDownloader）
-    std::filesystem::path logs_dir;         ///< 日志文件目录
-    std::filesystem::path data_dir;         ///< 应用数据目录
+    std::filesystem::path app_root;         ///< 运行时根目录（默认等于 run_dir）
+    std::filesystem::path logs_dir;         ///< 日志文件目录（默认等于 run_dir）
+    std::filesystem::path data_dir;         ///< 应用数据目录（默认等于 run_dir）
     std::filesystem::path exports_dir;      ///< 导出文件输出目录
-    std::filesystem::path webview_dir;      ///< WebView 缓存目录
+    std::filesystem::path webview_dir;      ///< WebView 缓存目录（默认位于 run_dir/webview）
     std::filesystem::path db_path;          ///< SQLite 数据库文件路径
     std::filesystem::path log_path;         ///< 日志文件路径
     std::filesystem::path plugin_dir;       ///< JS 插件目录

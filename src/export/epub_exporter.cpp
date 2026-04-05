@@ -290,7 +290,14 @@ std::string EpubExporter::make_opf(const Book& book,
     for (int i = 0; i < static_cast<int>(chapters.size()); ++i) {
         s << "    <itemref idref=\"ch" << i << "\"/>\n";
     }
-    s << "  </spine>\n</package>\n";
+    s << "  </spine>\n";
+    if (opts.has_cover_image()) {
+        s << R"(  <guide>
+    <reference type="cover" title="封面" href="cover.xhtml"/>
+  </guide>
+)";
+    }
+    s << "</package>\n";
     return s.str();
 }
 

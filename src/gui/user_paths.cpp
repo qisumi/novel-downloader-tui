@@ -1,13 +1,12 @@
 /// @file user_paths.cpp
 /// @brief GUI 运行时路径解析实现
 ///
-/// 通过 Windows API 获取可执行文件路径和 LocalAppData 路径，
+/// 通过 Windows API 获取可执行文件路径，
 /// 并在多个候选位置中查找插件和前端资源目录。
 
 #include "gui/user_paths.h"
 
 #include <windows.h>
-#include <shlobj.h>
 
 #include <stdexcept>
 #include <string>
@@ -35,19 +34,6 @@ static std::filesystem::path executable_directory()
     }
 }
 
-/// 获取 Windows LocalAppData 目录（如 C:\Users\xxx\AppData\Local）
-static std::filesystem::path local_app_data()
-{
-    PWSTR raw = nullptr;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &raw))) {
-        throw std::runtime_error("Failed to resolve LocalAppData");
-    }
-
-    std::filesystem::path path(raw);
-    CoTaskMemFree(raw);
-    return path;
-}
-
 /// 从候选路径列表中返回第一个存在的路径，若都不存在则返回空路径
 static std::filesystem::path first_existing_path(const std::vector<std::filesystem::path>& candidates)
 {
@@ -65,10 +51,10 @@ static std::filesystem::path first_existing_path(const std::vector<std::filesyst
 ///
 /// 路径解析策略：
 ///   - 可执行文件目录：通过 GetModuleFileNameW 获取
-///   - 应用数据根目录：%LocalAppData%/NovelDownloader
+///   - 运行时根目录：当前工作目录
 ///   - 插件目录：优先查找 exe 同级 plugins/，其次查找工作目录 plugins/
 ///   - 前端目录：依次查找工作目录 src/gui/frontend/、gui/、exe 同级 gui/
-///   - 数据库文件：exe 同级 novel.db
+///   - 数据库文件：默认使用运行目录下的 novel.db
 ///   - 日志文件：工作目录下 novel-gui.log
 ///   - 导出目录：工作目录（与程序运行目录保持一致）
 GuiPaths resolve_gui_paths()
@@ -78,12 +64,12 @@ GuiPaths resolve_gui_paths()
     GuiPaths paths;
     paths.executable_dir = executable_directory();
     paths.run_dir = fs::current_path();
-    paths.app_root = local_app_data() / "NovelDownloader";
-    paths.logs_dir = paths.app_root / "logs";
-    paths.data_dir = paths.app_root / "data";
+    paths.app_root = paths.run_dir;
+    paths.logs_dir = paths.run_dir;
+    paths.data_dir = paths.run_dir;
     paths.exports_dir = paths.run_dir;
-    paths.webview_dir = paths.app_root / "webview";
-    paths.db_path = paths.executable_dir / "novel.db";
+    paths.webview_dir = paths.run_dir / "webview";
+    paths.db_path = paths.run_dir / "novel.db";
     paths.log_path = paths.run_dir / "novel-gui.log";
 
     // 按优先级查找插件目录

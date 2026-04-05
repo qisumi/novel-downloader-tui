@@ -2,6 +2,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <filesystem>
 #include <memory>
 #include <stdexcept>
 
@@ -58,12 +59,22 @@ bool table_has_column(SQLite::Database& db, const char* table_name, const char* 
 
 /// 打开（或创建）数据库文件，设置 WAL 模式与外键约束，然后初始化表结构。
 Database::Database(const std::string& db_path)
-    : db_(std::make_unique<SQLite::Database>(
-          db_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE)) {
+{
+    const auto db_file = std::filesystem::path(db_path);
+    const bool should_init = !std::filesystem::exists(db_file);
+    if (!db_file.parent_path().empty()) {
+        std::filesystem::create_directories(db_file.parent_path());
+    }
+
+    db_ = std::make_unique<SQLite::Database>(
+        db_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
     db_->exec("PRAGMA journal_mode=WAL;");      // 使用 WAL 模式提升并发读写性能
     db_->exec("PRAGMA synchronous=NORMAL;");     // 在 WAL 模式下 NORMAL 已足够安全
     db_->exec("PRAGMA foreign_keys=ON;");        // 启用外键约束，支持级联删除
     init_schema();
+    if (should_init) {
+        spdlog::info("Initialized new database at {}", db_file.string());
+    }
 }
 
 // ── 表结构初始化 ─────────────
